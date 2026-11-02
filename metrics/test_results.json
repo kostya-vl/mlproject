@@ -1,0 +1,67 @@
+{
+  "rows": [
+    {
+      "file": "tests/test_predictor.py",
+      "test": "test_positive_correct_input",
+      "status": "PASSED"
+    },
+    {
+      "file": "tests/test_predictor.py",
+      "test": "test_negative_wrong_type",
+      "status": "PASSED"
+    },
+    {
+      "file": "tests/test_predictor.py",
+      "test": "test_negative_none_and_empty",
+      "status": "PASSED"
+    },
+    {
+      "file": "tests/test_predictor.py",
+      "test": "test_negative_nan_inf",
+      "status": "PASSED"
+    },
+    {
+      "file": "tests/test_predictor.py",
+      "test": "test_negative_too_many_spans",
+      "status": "PASSED"
+    },
+    {
+      "file": "tests/test_predictor.py",
+      "test": "test_negative_span_too_long",
+      "status": "PASSED"
+    },
+    {
+      "file": "tests/test_predictor.py",
+      "test": "test_negative_nul_and_ctrl",
+      "status": "PASSED"
+    },
+    {
+      "file": "tests/test_predictor.py",
+      "test": "test_negative_file_too_large",
+      "status": "PASSED"
+    },
+    {
+      "file": "tests/test_predictor.py",
+      "test": "test_negative_file_binary_magic",
+      "status": "PASSED"
+    },
+    {
+      "file": "tests/test_predictor.py",
+      "test": "test_negative_file_bad_extension",
+      "status": "PASSED"
+    },
+    {
+      "file": "tests/test_predictor.py",
+      "test": "test_negative_file_bad_encoding",
+      "status": "PASSED"
+    },
+    {
+      "file": "tests/test_predictor.py",
+      "test": "test_negative_file_missing",
+      "status": "PASSED"
+    }
+  ],
+  "passed": 12,
+  "failed": 0,
+  "pytest_returncode": 0
+}
