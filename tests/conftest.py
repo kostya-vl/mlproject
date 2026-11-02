@@ -1,0 +1,54 @@
+import os, sys
+import joblib
+import pytest
+
+PROJECT = os.path.expanduser("~/mlproject")
+if PROJECT not in sys.path:
+    sys.path.insert(0, PROJECT)
+
+import src.predictor as pred_mod
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+
+
+@pytest.fixture
+def fake_artifacts(tmp_path, monkeypatch):
+    """Маленькие фейковые .joblib + подмена _DEFAULT_ART."""
+    spans = ["a@b.com", "c@d.com", "+7 900 111-22-33", "+7 900 444-55-66",
+             "123-456-789 00", "987-654-321 00"]
+    labels = ["EMAIL", "EMAIL", "PHONE_NUMBER", "PHONE_NUMBER", "SNILS", "SNILS"]
+
+    vec = TfidfVectorizer(analyzer="char_wb", ngram_range=(2, 4), min_df=1)
+    X = vec.fit_transform(spans)
+    clf = LogisticRegression(max_iter=1000, random_state=42).fit(X, labels)
+
+    joblib.dump(vec, tmp_path / "lab2_span_tfidf.joblib")
+    joblib.dump(clf, tmp_path / "lab2_span_logreg.joblib")
+
+    monkeypatch.setattr(pred_mod, "_DEFAULT_ART", tmp_path)
+    monkeypatch.setattr(pred_mod, "_VECTORIZER", None)
+    monkeypatch.setattr(pred_mod, "_MODEL", None)
+    monkeypatch.setattr(pred_mod, "_EXPECTED_N_FEATURES", None)
+    yield tmp_path
+
+
+class ModelSpy:
+    def __init__(self):
+        self.called = False
+    def predict_proba(self, X):
+        self.called = True
+        raise AssertionError("model.predict_proba must NOT be called on invalid input")
+    @property
+    def classes_(self):
+        return ["EMAIL", "PHONE_NUMBER", "SNILS"]
+    n_features_in_ = None
+
+
+@pytest.fixture
+def model_spy(fake_artifacts, monkeypatch):
+    pred_mod._ensure_model()
+    spy = ModelSpy()
+    spy.n_features_in_ = pred_mod._EXPECTED_N_FEATURES
+    monkeypatch.setattr(pred_mod, "_MODEL", spy)
+    yield spy
+    assert not spy.called, "модель была вызвана при невалидном входе"
