@@ -18,6 +18,7 @@ from pathlib import Path
 
 import joblib
 import numpy as np
+import pandas as pd
 
 # ==== ОГРАНИЧЕНИЯ ====
 MAX_SPANS_PER_REQUEST = 1_000
