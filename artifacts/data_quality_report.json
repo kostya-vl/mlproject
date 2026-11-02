@@ -1,0 +1,26 @@
+{
+  "dataset": "scanpatch/pii-ner-corpus-synthetic-controlled",
+  "splits": {
+    "train": 4786,
+    "test": 532
+  },
+  "columns": [
+    "text",
+    "entity_starts",
+    "entity_ends",
+    "entity_labels",
+    "entity_texts",
+    "source",
+    "noisy"
+  ],
+  "n_entity_types": 27,
+  "n_spans_total": 32500,
+  "min_per_type": 28,
+  "max_per_type": 4989,
+  "types_lt_100_spans": 3,
+  "types_lt_30_spans": 1,
+  "negatives_train": 473,
+  "negatives_test": 58,
+  "label_errors": 0,
+  "leakage_texts": 0
+}
