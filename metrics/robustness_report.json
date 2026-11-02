@@ -1,0 +1,122 @@
+{
+  "sample_size": 20,
+  "seed": 42,
+  "transforms": {
+    "upper": {
+      "n": 20,
+      "flips": 0,
+      "flip_rate": 0.0,
+      "acc_before": 0.6,
+      "acc_after": 0.6,
+      "delta_acc": 0.0,
+      "degradation": 0,
+      "improvement": 0
+    },
+    "title": {
+      "n": 20,
+      "flips": 0,
+      "flip_rate": 0.0,
+      "acc_before": 0.6,
+      "acc_after": 0.6,
+      "delta_acc": 0.0,
+      "degradation": 0,
+      "improvement": 0
+    },
+    "spaces": {
+      "n": 20,
+      "flips": 0,
+      "flip_rate": 0.0,
+      "acc_before": 0.6,
+      "acc_after": 0.6,
+      "delta_acc": 0.0,
+      "degradation": 0,
+      "improvement": 0
+    },
+    "typo_swap": {
+      "n": 20,
+      "flips": 5,
+      "flip_rate": 0.25,
+      "acc_before": 0.6,
+      "acc_after": 0.45,
+      "delta_acc": -0.14999999999999997,
+      "degradation": 4,
+      "improvement": 1
+    },
+    "typo_drop": {
+      "n": 20,
+      "flips": 4,
+      "flip_rate": 0.2,
+      "acc_before": 0.6,
+      "acc_after": 0.45,
+      "delta_acc": -0.14999999999999997,
+      "degradation": 3,
+      "improvement": 0
+    },
+    "homoglyph": {
+      "n": 20,
+      "flips": 3,
+      "flip_rate": 0.15,
+      "acc_before": 0.6,
+      "acc_after": 0.5,
+      "delta_acc": -0.09999999999999998,
+      "degradation": 2,
+      "improvement": 0
+    }
+  },
+  "atypical": [
+    {
+      "name": "email с эмодзи",
+      "span": "ivan.petrov🙂@example.com",
+      "pred": "email",
+      "confidence": 0.897951484925932
+    },
+    {
+      "name": "email с HTML",
+      "span": "<b>ivan</b>@example.com",
+      "pred": "email",
+      "confidence": 0.9186131474854113
+    },
+    {
+      "name": "гомоглиф email",
+      "span": "ivаn.petrоv@exаmple.com",
+      "pred": "email",
+      "confidence": 0.9447373776878469
+    },
+    {
+      "name": "очень длинный спан",
+      "span": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "pred": "address_city",
+      "confidence": 0.10861025050373131
+    },
+    {
+      "name": "повторяющиеся символы",
+      "span": "ааааааааааааааа",
+      "pred": "vehicle_number",
+      "confidence": 0.7295627339879583
+    },
+    {
+      "name": "полностью цифры",
+      "span": "9999999999999999",
+      "pred": "vehicle_number",
+      "confidence": 0.27826274940469686
+    },
+    {
+      "name": "только пунктуация",
+      "span": "!@#$%^&*()",
+      "pred": "first_name",
+      "confidence": 0.10646620535053901
+    },
+    {
+      "name": "пробелы+табы",
+      "span": "  \t  +7  900\t123-45-67  ",
+      "pred": "mobile_phone",
+      "confidence": 0.9172674719105227
+    },
+    {
+      "name": "fullwidth цифры",
+      "span": "+7 ９００ 123-45-67",
+      "pred": "mobile_phone",
+      "confidence": 0.9142918782365717
+    }
+  ]
+}
