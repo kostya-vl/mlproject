@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Test / cache
+.pytest_cache/
+
+# Secrets
+.env
+.env.*
+*.pem
+id_rsa
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Temporary / not-for-commit
+*.tmp
+*.log
