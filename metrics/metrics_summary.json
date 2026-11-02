@@ -1,0 +1,27 @@
+{
+  "created_at_utc": "2026-11-02T14:51:02.862721+00:00",
+  "evaluation_split": "test (hold-out, not used for tuning)",
+  "main_metric": {
+    "name": "macro_f1",
+    "value": 0.6306346060388888,
+    "rationale": "дисбаланс 27 типов; macro-F1 штрафует провал по редким классам, weighted-F1 и accuracy маскируют его"
+  },
+  "metrics": {
+    "accuracy": 0.8088002532446977,
+    "precision_macro": 0.6117260555464559,
+    "recall_macro": 0.6844085090740093,
+    "f1_macro": 0.6306346060388888,
+    "f1_weighted": 0.8157041063376368
+  },
+  "baseline_majority": {
+    "majority_class": "ip",
+    "accuracy": 0.18328584995251662,
+    "f1_macro": 0.011915051240893938
+  },
+  "test_size_spans": 3159,
+  "data_version": {
+    "dataset": "scanpatch/pii-ner-corpus-synthetic-controlled",
+    "snapshot_hash": "6af0587dde068d90d8a1080285159c374b46a09b",
+    "test_arrow_sha256": "b83e61317f398e6c0cabbd2428c7e52251a7b688a197735128d507437c3e8e4b"
+  }
+}

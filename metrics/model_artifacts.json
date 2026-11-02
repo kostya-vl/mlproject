@@ -1,0 +1,22 @@
+{
+  "created_at_utc": "2026-11-02T15:03:59.857133+00:00",
+  "framework": "scikit-learn",
+  "model_files": {
+    "lab2_span_logreg.joblib": {
+      "sha256": "98b80ba98fc606323673795bf35c14b73f4b5bb62b6d000e9bd54a4185f507ae",
+      "size_bytes": 2161615
+    },
+    "lab2_span_tfidf.joblib": {
+      "sha256": "234d712c786767548b18dfba2182fc7ac96fa1bc564ce4524225c4b11994f566",
+      "size_bytes": 351303
+    }
+  },
+  "data_files": {
+    "pii-ner-corpus-synthetic-controlled-test.arrow": "b83e61317f398e6c0cabbd2428c7e52251a7b688a197735128d507437c3e8e4b",
+    "pii-ner-corpus-synthetic-controlled-train.arrow": "2172e04c64f80b7451a500835eff8b0ba70820386669bc7727401a56669ed216",
+    "dataset_info.json": "eed5f519435f01b2a069d0aa9fceb9a4b8d05311a1836f23ccff6afa4fc99e56"
+  },
+  "data_id": "df2b9b24503d0ea8fee87bad4cf046169b77b78da353fb23f4140ebc581cb84b",
+  "data_source": "scanpatch/pii-ner-corpus-synthetic-controlled",
+  "data_snapshot": "6af0587dde068d90d8a1080285159c374b46a09b"
+}
