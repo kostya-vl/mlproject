@@ -1,0 +1,39 @@
+{
+  "task": "span-type classification (baseline component for NER)",
+  "model": "LogisticRegression(class_weight='balanced')",
+  "seed": 42,
+  "sklearn_version": "1.9.1",
+  "train_time_sec": 10.619,
+  "vectorizer": {
+    "analyzer": "char_wb",
+    "ngram_range": [
+      2,
+      5
+    ],
+    "max_features": 10000,
+    "min_df": 1
+  },
+  "n_features": 10000,
+  "sizes": {
+    "train": 24995,
+    "val": 4346,
+    "test": 3159
+  },
+  "baseline": {
+    "majority_class": "ip",
+    "acc_val": 0.15163368614818223,
+    "macro_f1_val": 0.009753209753209754
+  },
+  "model_metrics": {
+    "val": {
+      "acc": 0.8177634606534745,
+      "macro_f1": 0.6582896339388128,
+      "weighted_f1": 0.822627736643917
+    },
+    "test": {
+      "acc": 0.8088002532446977,
+      "macro_f1": 0.6306346060388888,
+      "weighted_f1": 0.8157041063376368
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "seed": 42,
+  "split_method": "GroupShuffleSplit by text",
+  "sizes": {
+    "train": 4069,
+    "val": 717,
+    "test": 532
+  },
+  "leakage_text": {
+    "train_val": 0,
+    "train_test": 0,
+    "val_test": 0
+  },
+  "label_vocab_size": 27,
+  "tfidf_features": 5000,
+  "token_vocab_size": 18463
+}
