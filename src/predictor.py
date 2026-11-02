@@ -101,20 +101,15 @@ def _normalize(s):
 
 def validate_input(spans):
     """Возвращает нормализованный list[str]. NaN/Inf/None -> ValidationError."""
-    try:
-        import pandas as pd
-        if isinstance(spans, pd.DataFrame):
-            for col in ("span", "text"):
-                if col in spans.columns:
-                    spans = spans[col].tolist()
-                    break
-            else:
-                raise ValidationError(
-                    f"DataFrame: нужна колонка 'span' или 'text', "
-                    f"есть {list(spans.columns)}"
-                )
-    except ImportError:
-        pass
+    if isinstance(spans, pd.DataFrame):
+        for col in ("span", "text"):
+            if col in spans.columns:
+                spans = spans[col].tolist()
+                break
+        else:
+            raise ValidationError(
+                f"DataFrame: нужна колонка 'span' или 'text', есть {list(spans.columns)}"
+            )
 
     if spans is None:
         raise ValidationError("input: None не допускается")
