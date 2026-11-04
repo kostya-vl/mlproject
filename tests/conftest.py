@@ -2,7 +2,8 @@ import os, sys
 import joblib
 import pytest
 
-PROJECT = os.path.expanduser("~/mlproject")
+from pathlib import Path
+PROJECT = str(Path(__file__).resolve().parent.parent)
 if PROJECT not in sys.path:
     sys.path.insert(0, PROJECT)
 
@@ -52,3 +53,37 @@ def model_spy(fake_artifacts, monkeypatch):
     monkeypatch.setattr(pred_mod, "_MODEL", spy)
     yield spy
     assert not spy.called, "модель была вызвана при невалидном входе"
+
+
+@pytest.fixture
+def small_spans_df():
+    """Фиксированный DataFrame: 4 документа, 3 спана, один документ без сущностей."""
+    import pandas as pd
+    return pd.DataFrame({
+        "text": [
+            "contact ivan@example.com",
+            "phone +7 900 123-45-67",
+            "no entities here",
+            "snils 123-456-789 00",
+        ],
+        "entity_starts": [[8], [6], None, [6]],
+        "entity_ends":   [[25], [23], None, [20]],
+        "entity_labels": [["EMAIL"], ["PHONE_NUMBER"], None, ["SNILS"]],
+    })
+
+
+@pytest.fixture
+def known_metrics():
+    """Маленький пример с заранее известными метриками.
+
+    y_true: [A, A, B, B, C]   y_pred: [A, B, B, B, C]
+    accuracy = 3/5 = 0.6
+    macro_f1 ≈ 0.8222  (A: 0.6667, B: 0.8, C: 1.0 → среднее)
+    """
+    return {
+        "y_true": ["A", "A", "B", "B", "C"],
+        "y_pred": ["A", "B", "B", "B", "C"],
+        "expected_accuracy": 0.6,
+        "expected_macro_f1": 0.8222,
+        "tolerance": 0.001,
+    }
