@@ -31,7 +31,7 @@ _BINARY_MAGIC = (
     b"%PDF", b"PK\x03\x04", b"\x89PNG",
     b"\xff\xd8\xff", b"GIF8", b"\x1f\x8b",
 )
-_DEFAULT_ART = Path(os.path.expanduser("~/mlproject/artifacts"))
+_DEFAULT_ART = Path(__file__).resolve().parent.parent / "artifacts"
 
 
 class PredictorError(Exception):
@@ -55,8 +55,8 @@ _MODEL = None
 _EXPECTED_N_FEATURES = None
 
 
-def load_model(artifacts_dir=_DEFAULT_ART):
-    art = Path(artifacts_dir)
+def load_model(artifacts_dir=None):
+    art = Path(artifacts_dir) if artifacts_dir is not None else _DEFAULT_ART
     vec_path = art / "lab2_span_tfidf.joblib"
     mdl_path = art / "lab2_span_logreg.joblib"
     if not vec_path.exists() or not mdl_path.exists():
