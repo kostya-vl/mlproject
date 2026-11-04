@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Verify CI data integrity
+        run: |
+          cd ci_data
+          sha256sum -c CHECKSUMS.sha256
+
+      - name: Run tests
+        run: python -m pytest tests/ -q
+
+      - name: Train on CI sample
+        run: python -m src.train --artifacts ci_data --seed 42
+
+      - name: Evaluate on CI test
+        run: python -m src.ci_eval --artifacts ci_data --data ci_data/test.parquet --out metrics/ci_metrics.json
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-artifacts
+          path: |
+            ci_data/lab2_span_tfidf.joblib
+            ci_data/lab2_span_logreg.joblib
+            metrics/ci_metrics.json
+          if-no-files-found: error

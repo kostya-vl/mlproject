@@ -1,0 +1,9 @@
+{
+  "task": "span-type classification (baseline)",
+  "seed": 42,
+  "sklearn_version": "1.9.1",
+  "train_time_sec": 0.523,
+  "n_spans": 686,
+  "n_features": 10000,
+  "n_classes": 27
+}
