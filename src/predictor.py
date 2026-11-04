@@ -13,11 +13,11 @@ from __future__ import annotations
 
 import os
 import re
-import unicodedata
 from pathlib import Path
 
 import joblib
 import numpy as np
+from .preprocessing import normalize_text as _normalize
 import pandas as pd
 
 # ==== ОГРАНИЧЕНИЯ ====
@@ -94,10 +94,6 @@ def _check_string(s, field, max_len):
     if len(s) > max_len:
         raise InputTooLargeError(f"{field}: длина {len(s)} > {max_len}")
     return s
-
-
-def _normalize(s):
-    return unicodedata.normalize("NFKC", s).strip()
 
 
 def validate_input(spans):

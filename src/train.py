@@ -21,26 +21,10 @@ import pandas as pd
 import sklearn
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
+from .preprocessing import flatten_spans
 
 DEFAULT_ART = Path(os.path.expanduser("~/mlproject/artifacts"))
 
-
-def flatten_spans(df):
-    """Разворачивает документы в отдельные спаны (span, label)."""
-    rows = []
-    for _, r in df.iterrows():
-        text = r.get("text") or ""
-        starts = r.get("entity_starts")
-        if starts is None:
-            continue
-        try:
-            if len(starts) == 0:
-                continue
-        except TypeError:
-            continue
-        for s, e, lbl in zip(r["entity_starts"], r["entity_ends"], r["entity_labels"]):
-            rows.append({"span": text[s:e], "label": lbl})
-    return pd.DataFrame(rows)
 
 
 def train(train_parquet, out_dir, seed=42):

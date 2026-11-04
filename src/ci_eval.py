@@ -1,4 +1,4 @@
-"""Оценка модели на CI-выборке: загружает модель из artifacts, считает macro-F1."""
+"""Оценка модели на CI-выборке: загрузка модели + compute_metrics."""
 from __future__ import annotations
 
 import argparse
@@ -7,24 +7,9 @@ from pathlib import Path
 
 import joblib
 import pandas as pd
-from sklearn.metrics import accuracy_score, f1_score
 
-
-def flatten(df):
-    rows = []
-    for _, r in df.iterrows():
-        t = r.get("text") or ""
-        s = r.get("entity_starts")
-        if s is None:
-            continue
-        try:
-            if len(s) == 0:
-                continue
-        except TypeError:
-            continue
-        for st, en, lb in zip(r["entity_starts"], r["entity_ends"], r["entity_labels"]):
-            rows.append({"span": t[st:en], "label": lb})
-    return pd.DataFrame(rows)
+from .metrics import compute_metrics
+from .preprocessing import flatten_spans
 
 
 def main():
@@ -46,18 +31,14 @@ def main():
     vec = joblib.load(vec_path)
     model = joblib.load(mdl_path)
 
-    sp = flatten(pd.read_parquet(args.data))
+    sp = flatten_spans(pd.read_parquet(args.data))
     if sp.empty:
         raise SystemExit(f"В {args.data} нет спанов — проверьте файл")
 
     X = vec.transform(sp["span"])
     pred = model.predict(X)
+    metrics = compute_metrics(sp["label"], pred)
 
-    metrics = {
-        "accuracy": float(accuracy_score(sp["label"], pred)),
-        "macro_f1": float(f1_score(sp["label"], pred, average="macro", zero_division=0)),
-        "n_spans": int(len(sp)),
-    }
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     print(json.dumps(metrics, indent=2))
