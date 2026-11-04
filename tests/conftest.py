@@ -77,13 +77,13 @@ def known_metrics():
     """Маленький пример с заранее известными метриками.
 
     y_true: [A, A, B, B, C]   y_pred: [A, B, B, B, C]
-    accuracy = 3/5 = 0.6
-    macro_f1 ≈ 0.8222  (A: 0.6667, B: 0.8, C: 1.0 → среднее)
+    accuracy = 4/5 = 0.8   (совпали позиции 1, 3, 4, 5; ошибка в позиции 2)
+    macro_f1 ≈ 0.8222      (A: 0.6667, B: 0.8, C: 1.0 → среднее)
     """
     return {
         "y_true": ["A", "A", "B", "B", "C"],
         "y_pred": ["A", "B", "B", "B", "C"],
-        "expected_accuracy": 0.6,
+        "expected_accuracy": 0.8,
         "expected_macro_f1": 0.8222,
         "tolerance": 0.001,
     }
