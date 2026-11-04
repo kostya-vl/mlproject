@@ -17,7 +17,9 @@ def flatten_spans(df: pd.DataFrame) -> pd.DataFrame:
     """Разворачивает документы в отдельные спаны (span, label)."""
     rows = []
     for _, r in df.iterrows():
-        text = r.get("text") or ""
+        text = r.get("text")
+        if text is None:
+            text = ""
         starts = r.get("entity_starts")
         if starts is None:
             continue
@@ -26,8 +28,12 @@ def flatten_spans(df: pd.DataFrame) -> pd.DataFrame:
                 continue
         except TypeError:
             continue
-        ends = r.get("entity_ends") or []
-        labels = r.get("entity_labels") or []
+        ends = r.get("entity_ends")
+        if ends is None:
+            ends = []
+        labels = r.get("entity_labels")
+        if labels is None:
+            labels = []
         for s, e, lbl in zip(starts, ends, labels):
             s = max(0, int(s))
             e = min(len(text), int(e))
