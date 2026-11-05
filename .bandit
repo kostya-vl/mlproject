@@ -1,0 +1,15 @@
+exclude_dirs:
+  - tests
+  - venv
+  - .venv
+  - artifacts
+  - models
+  - ci_data
+  - notebooks
+
+skips:
+  - B101   # assert_used — используется в тестах (exclude_dirs уже исключает tests)
+  - B301   # pickle — joblib.load только из фиксированных artifacts/ и models/,
+           #           путь не из пользовательского ввода (README ЛР2 п.8, п.10)
+  - B615   # huggingface unsafe download — в src/ нет huggingface_hub;
+           #           датасет качается в ноутбуках ЛР2 с SHA-256
