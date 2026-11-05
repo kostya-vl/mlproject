@@ -21,6 +21,7 @@ import pandas as pd
 import sklearn
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
+
 from .preprocessing import flatten_spans
 
 DEFAULT_ART = Path(os.path.expanduser("~/mlproject/artifacts"))
@@ -59,7 +60,7 @@ def train(train_parquet, out_dir, seed=42):
         "seed": seed,
         "sklearn_version": sklearn.__version__,
         "train_time_sec": round(train_time, 3),
-        "n_spans": int(len(sp)),
+        "n_spans": len(sp),
         "n_features": int(X.shape[1]),
         "n_classes": int(sp["label"].nunique()),
     }

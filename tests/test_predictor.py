@@ -1,10 +1,12 @@
-import os
 import pytest
 
 import src.predictor as pred_mod
 from src.predictor import (
-    predict, predict_from_file,
-    PredictorError, ValidationError, InputTooLargeError, FormatError,
+    FormatError,
+    InputTooLargeError,
+    ValidationError,
+    predict,
+    predict_from_file,
 )
 
 

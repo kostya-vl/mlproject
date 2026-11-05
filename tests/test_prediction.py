@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 import src.predictor as pred_mod
-from src.predictor import predict, PredictorError
+from src.predictor import PredictorError, predict
 
 
 @pytest.mark.unit

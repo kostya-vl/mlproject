@@ -34,7 +34,7 @@ def flatten_spans(df: pd.DataFrame) -> pd.DataFrame:
         labels = r.get("entity_labels")
         if labels is None:
             labels = []
-        for s, e, lbl in zip(starts, ends, labels):
+        for s, e, lbl in zip(starts, ends, labels, strict=False):
             s = max(0, int(s))
             e = min(len(text), int(e))
             if s >= e:

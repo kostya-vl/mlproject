@@ -11,14 +11,14 @@ InputTooLargeError, FormatError, ModelError).
 """
 from __future__ import annotations
 
-import os
 import re
 from pathlib import Path
 
 import joblib
 import numpy as np
-from .preprocessing import normalize_text as _normalize
 import pandas as pd
+
+from .preprocessing import normalize_text as _normalize
 
 # ==== ОГРАНИЧЕНИЯ ====
 MAX_SPANS_PER_REQUEST = 1_000
@@ -232,5 +232,5 @@ def predict_from_file(path, *, top_k=None):
     if text is None:
         raise FormatError("file: не удалось декодировать как UTF-8")
 
-    spans = [ln for ln in (l.strip() for l in text.splitlines()) if ln]
+    spans = [ln for ln in (line.strip() for line in text.splitlines()) if ln]
     return predict(spans, top_k=top_k)

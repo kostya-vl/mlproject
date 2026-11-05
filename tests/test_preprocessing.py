@@ -1,7 +1,6 @@
 import pandas as pd
-import pytest
 
-from src.preprocessing import normalize_text, flatten_spans
+from src.preprocessing import flatten_spans, normalize_text
 
 
 def test_normalize_text_nfkc_and_strip():

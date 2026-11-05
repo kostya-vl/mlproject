@@ -1,0 +1,25 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
+ignore = [
+    "E501",
+    "S101",
+    "S603",
+    "S607",
+    "RUF001",
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S603", "S607", "S105", "S106", "E501"]
+"tests/conftest.py" = ["E402"]  # sys.path.insert(PROJECT) обязан быть до import src
+"src/train.py" = ["T201"]
+"src/ci_eval.py" = ["T201"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]

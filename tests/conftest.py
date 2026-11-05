@@ -1,15 +1,17 @@
-import os, sys
+import sys
+from pathlib import Path
+
 import joblib
 import pytest
 
-from pathlib import Path
 PROJECT = str(Path(__file__).resolve().parent.parent)
 if PROJECT not in sys.path:
     sys.path.insert(0, PROJECT)
 
-import src.predictor as pred_mod
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
+
+import src.predictor as pred_mod
 
 
 @pytest.fixture
