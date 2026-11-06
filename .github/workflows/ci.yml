@@ -30,6 +30,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Lint with Ruff
+        run: ruff check src/ tests/
+
+      - name: Security scan with Bandit
+        run: |
+          python -m bandit -r src/ -c .bandit -f json -o metrics/bandit_report.json
+          python -m bandit -r src/ -c .bandit
+
+      - name: Generate pip-audit report
+        run: python -m pip_audit -r requirements.txt -f json -o metrics/pip_audit_report.json || true
+
+      - name: Enforce audit policy
+        run: python scripts/audit_policy.py --report metrics/pip_audit_report.json
+
       - name: Verify CI data integrity
         run: |
           cd ci_data
