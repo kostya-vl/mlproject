@@ -30,6 +30,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Data gate (train sample)
+        run: python scripts/data_gate.py --config configs/data_gate.yaml
+
       - name: Lint with Ruff
         run: ruff check src/ tests/
 
@@ -54,6 +57,16 @@ jobs:
 
       - name: Run integration tests
         run: python -m pytest -m integration -q
+
+      - name: Demo — gate must reject broken data
+        run: |
+          if python scripts/data_gate.py --config configs/data_gate.yaml \
+               --data ci_data/train_broken.parquet --skip-checksum; then
+            echo "ERROR: gate incorrectly passed broken data"
+            exit 1
+          else
+            echo "OK: gate correctly rejected broken data"
+          fi
 
       - name: Train on CI sample
         run: python -m src.train --artifacts ci_data --seed 42

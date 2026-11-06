@@ -1,0 +1,43 @@
+# Правила data-gate: проверяются перед обучением/оценкой.
+# Нарушение любого правила → exit code 1 (pipeline останавливается).
+
+version: 1
+
+data:
+  # Неизменяемая контрольная выборка (CI-sample, коммитится в репозиторий)
+  path: ci_data/train.parquet
+  checksums_file: ci_data/CHECKSUMS.sha256
+  # Идентификатор источника (для отчёта, не проверяется по сети)
+  dataset: scanpatch/pii-ner-corpus-synthetic-controlled
+  snapshot: 6af0587dde068d90d8a1080285159c374b46a09b
+
+# Обязательные колонки и их типы (по элементу, не по dtype pandas)
+required_columns:
+  - text
+  - entity_starts
+  - entity_ends
+  - entity_labels
+
+column_types:
+  text: "str"
+  entity_starts: "list[int]"
+  entity_ends: "list[int]"
+  entity_labels: "list[str]"
+
+constraints:
+  # Объём: минимальное число документов и суммарное число спанов
+  min_rows: 50
+  min_spans: 50
+
+  # Форма и размеры
+  max_text_len: 10000        # длина одного документа
+  max_span_len: 1000         # длина одного спана (PII по природе короткий)
+
+  # Политика пропусков/NaN/Inf (по ЛР2: контролируемое отклонение)
+  forbid_none_in: ["text"]
+  forbid_nan_in:  ["text"]
+  forbid_inf_in:  ["text"]
+
+  # Распределение классов (типов сущностей)
+  min_per_class: 1           # каждый присутствующий класс — хотя бы 1 спан
+  max_class_ratio: 300       # max(count) / min(count) по классам не больше порога
