@@ -1,0 +1,31 @@
+# Политика сравнения кандидата с baseline (ЛР3, задание 6).
+# baseline не перезаписывается: он читается из metrics/baseline.json (ЛР2 п.4).
+
+version: 1
+
+metric:
+  name: macro_f1
+  direction: higher_is_better
+  # candidate >= baseline * (1 - allowed_relative_drop) => pass
+  allowed_relative_drop: 0.05
+  # абсолютный минимум, если baseline == 0
+  absolute_min: 0.0
+
+data:
+  # фиксированная контрольная выборка (test-сплит ЛР2, 532 документа)
+  test_parquet: artifacts/test.parquet
+  # источник baseline — только чтение, не перезапись
+  baseline_file: metrics/baseline.json
+  # результат текущего запуска — отдельно от baseline
+  candidate_file: metrics/candidate.json
+  # слабый кандидат для демо сбоя (константный предиктор)
+  candidate_weak_file: metrics/candidate_weak.json
+  # результат сравнения — отдельно
+  comparison_file: metrics/comparison.json
+  models_dir: models
+
+# совместимость версии данных: candidate.data_version должен совпадать с baseline
+data_version:
+  required_fields:
+    - snapshot_hash
+    - test_arrow_sha256

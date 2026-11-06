@@ -1,0 +1,26 @@
+{
+  "created_at_utc": "2026-11-06T22:57:56.348323+00:00",
+  "model": {
+    "type": "constant_predictor",
+    "class": "ip",
+    "note": "заведомо слабый кандидат для демонстрации сбоя gate"
+  },
+  "eval": {
+    "data": "artifacts/test.parquet",
+    "n_spans": 3159
+  },
+  "metric": {
+    "name": "macro_f1",
+    "value": 0.011915051240893938
+  },
+  "metrics_all": {
+    "accuracy": 0.18328584995251662,
+    "macro_f1": 0.011915051240893938,
+    "n_spans": 3159
+  },
+  "data_version": {
+    "snapshot_hash": "6af0587dde068d90d8a1080285159c374b46a09b",
+    "test_arrow_sha256": "b83e61317f398e6c0cabbd2428c7e52251a7b688a197735128d507437c3e8e4b",
+    "test_parquet_sha256": "6f486e24ab56eb37e59b40cdae5978bad100d759aa3b74f80a99dc5fd3f87f68"
+  }
+}

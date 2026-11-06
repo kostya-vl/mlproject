@@ -68,6 +68,23 @@ jobs:
             echo "OK: gate correctly rejected broken data"
           fi
 
+      - name: Evaluate candidate on fixed test
+        run: python scripts/eval_candidate.py --policy configs/regression_policy.yaml
+
+      - name: Compare candidate vs baseline
+        run: python scripts/compare_models.py --policy configs/regression_policy.yaml
+
+      - name: Demo — regression gate rejects weak candidate
+        run: |
+          python scripts/make_weak_candidate.py --policy configs/regression_policy.yaml
+          if python scripts/compare_models.py --policy configs/regression_policy.yaml \
+               --candidate metrics/candidate_weak.json --out metrics/comparison_weak.json; then
+            echo "ERROR: weak candidate incorrectly passed"
+            exit 1
+          else
+            echo "OK: weak candidate correctly rejected"
+          fi
+
       - name: Train on CI sample
         run: python -m src.train --artifacts ci_data --seed 42
 

@@ -1,0 +1,18 @@
+{
+  "metric": "macro_f1",
+  "direction": "higher_is_better",
+  "allowed_relative_drop": 0.05,
+  "baseline_file": "metrics/baseline.json",
+  "candidate_file": "metrics/candidate.json",
+  "baseline_value": 0.6306346060388888,
+  "candidate_value": 0.6306346060388888,
+  "data_version": {
+    "snapshot_hash": "6af0587dde068d90d8a1080285159c374b46a09b",
+    "test_arrow_sha256": "b83e61317f398e6c0cabbd2428c7e52251a7b688a197735128d507437c3e8e4b"
+  },
+  "threshold_mode": "baseline * (1 - 0.05)",
+  "threshold": 0.5991028757369443,
+  "pass": true,
+  "reason": "candidate 0.6306 >= threshold 0.5991",
+  "generated_at_utc": "2026-11-06T22:50:48.164018+00:00"
+}
