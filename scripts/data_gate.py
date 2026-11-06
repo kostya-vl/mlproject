@@ -9,6 +9,7 @@ Data gate: проверка данных до обучения/оценки.
 from __future__ import annotations
 
 import os
+
 os.environ.setdefault("ARROW_USER_SIMD_LEVEL", "NONE")
 
 import argparse

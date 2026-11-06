@@ -1,0 +1,47 @@
+# Git / IDE
+.git
+.gitignore
+.gitattributes
+.github
+.vscode
+.idea
+
+# Python / venv
+.venv
+venv
+env
+__pycache__
+*.py[cod]
+*.egg-info
+.pytest_cache
+
+# Jupyter
+.ipynb_checkpoints
+notebooks
+
+# Данные, артефакты, метрики, конфиги, тесты — в образ не нужны
+data
+ci_data
+artifacts
+metrics
+configs
+tests
+
+# Скрипты, кроме predict_cli.py
+scripts/*
+!scripts/predict_cli.py
+
+# Документация, конфиги линтеров, lock-файлы
+*.md
+README.md
+pyproject.toml
+.bandit
+pytest.ini
+requirements.txt
+requirements.lock.txt
+
+# Секреты / временное
+.env
+.env.*
+*.log
+*.tmp

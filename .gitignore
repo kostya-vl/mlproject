@@ -28,3 +28,7 @@ id_rsa
 # Temporary / not-for-commit
 *.tmp
 *.log
+
+# Модели нужны Docker-образу и integration-тестам
+!models/*.joblib
+!models/SHA256SUMS

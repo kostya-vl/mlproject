@@ -3,10 +3,13 @@
 Исходный train.parquet не изменяется.
 """
 from __future__ import annotations
+
 import os
+
 os.environ.setdefault("ARROW_USER_SIMD_LEVEL", "NONE")
 
 from pathlib import Path
+
 import pandas as pd
 
 SRC = Path("ci_data/train.parquet")
