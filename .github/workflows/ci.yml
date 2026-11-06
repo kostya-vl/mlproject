@@ -100,3 +100,35 @@ jobs:
             ci_data/lab2_span_logreg.joblib
             metrics/ci_metrics.json
           if-no-files-found: error
+
+  docker:
+    runs-on: ubuntu-24.04
+    needs: test-and-eval
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build Docker image
+        run: docker build -t ml-project:lab3 .
+
+      - name: UID inside container must be non-root
+        run: |
+          uid=$(docker run --rm --entrypoint id ml-project:lab3 -u)
+          echo "UID inside container: $uid"
+          test "$uid" != "0"
+
+      - name: Model integrity inside image
+        run: docker run --rm --entrypoint sh ml-project:lab3 -c "cd /app/models && sha256sum -c SHA256SUMS"
+
+      - name: Smoke — container predicts
+        run: |
+          docker run --rm ml-project:lab3 "ivan.petrov@example.com" "+7 900 123-45-678" | tee /tmp/pred.json
+          python - <<'PY'
+          import json
+          d = json.load(open("/tmp/pred.json"))
+          assert isinstance(d, list) and d, "empty prediction"
+          assert "label" in d[0] and "confidence" in d[0]
+          assert d[0]["confidence"] > 0
+          print("smoke OK:", d[0])
+          PY
