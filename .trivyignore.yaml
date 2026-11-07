@@ -1,0 +1,19 @@
+# Точечные исключения CRITICAL, которые нельзя устранить обновлением базового образа.
+# Gate НЕ отключается: без --ignorefile trivy image --severity CRITICAL --exit-code 1
+# возвращает exit=1 (2 CRITICAL). С --ignorefile — exit=0.
+# expires: при обновлении базы Trivy исключения станут неактуальными —
+# это сигнал пересобрать образ и убрать их.
+
+vulnerabilities:
+  - id: CVE-2023-45853
+    statement: >
+      Debian: will_not_fix. Уязвимость в компоненте minizip (zipOpenNewFileInZip4_6),
+      который не используется приложением: инференс вызывает joblib.load / sklearn.transform /
+      predict_proba, не работающие с zip-архивами.
+    expires: "2026-12-31"
+
+  - id: CVE-2025-7458
+    statement: >
+      Debian: affected, FixedVersion отсутствует. Приложение не использует sqlite:
+      predict_cli.py, src.predictor, sklearn и joblib не открывают БД.
+    expires: "2026-12-31"
