@@ -4,24 +4,30 @@ CLI для инференса: python scripts/predict_cli.py "span1" "span2" ...
 """
 from __future__ import annotations
 
+import argparse
+import json
 import os
-os.environ.setdefault("ARROW_USER_SIMD_LEVEL", "NONE")
-
 import sys
 from pathlib import Path
 
-_here = Path(__file__).resolve()
-_root = _here.parent.parent if _here.parent.name == "scripts" else _here.parent
-sys.path.insert(0, str(_root))
+os.environ.setdefault("ARROW_USER_SIMD_LEVEL", "NONE")
 
-import argparse
-import json
 
-import src.predictor as pred_mod
-from src.predictor import PredictorError, predict
+def _bootstrap_path() -> None:
+    """Добавить корень проекта в sys.path до импорта src.*."""
+    here = Path(__file__).resolve()
+    root = here.parent.parent if here.parent.name == "scripts" else here.parent
+    sys.path.insert(0, str(root))
 
 
 def main() -> int:
+    _bootstrap_path()
+
+    # src.predictor импортируется после bootstrap — нужен sys.path с корнем.
+    # os.environ уже выставлен на уровне модуля до этого момента.
+    import src.predictor as pred_mod
+    from src.predictor import PredictorError, predict
+
     ap = argparse.ArgumentParser()
     ap.add_argument("spans", nargs="*", help="текстовые спаны")
     ap.add_argument("--models", default="/app/models")
