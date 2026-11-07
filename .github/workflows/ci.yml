@@ -140,7 +140,7 @@ jobs:
           image-ref: ml-project:lab3
           severity: CRITICAL
           exit-code: "1"
-          ignorefile: .trivyignore.yaml
+          trivyignore: .trivyignore.yaml
           format: json
           output: metrics/trivy_image_${{ github.run_id }}.json
 
