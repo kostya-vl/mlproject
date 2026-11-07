@@ -135,7 +135,7 @@ jobs:
 
 
       - name: Trivy image scan (CRITICAL gate)
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ml-project:lab3
           severity: CRITICAL
@@ -145,7 +145,7 @@ jobs:
           output: metrics/trivy_image_${{ github.run_id }}.json
 
       - name: Trivy config scan (Dockerfile gate)
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
           scan-ref: Dockerfile
