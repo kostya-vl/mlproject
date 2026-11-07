@@ -11,12 +11,16 @@ permissions:
   contents: read
 
 jobs:
+  # ============================================================
+  # Job 1: lint, tests, audit, data gate, model gate
+  # ============================================================
   test-and-eval:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout
+        uses: actions/checkout@v5
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v6
@@ -30,33 +34,37 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Data gate (train sample)
-        run: python scripts/data_gate.py --config configs/data_gate.yaml
-
+      # ---- lint + Bandit ----
       - name: Lint with Ruff
-        run: ruff check src/ tests/
+        run: ruff check src/ tests/ scripts/
 
       - name: Security scan with Bandit
         run: |
           python -m bandit -r src/ -c .bandit -f json -o metrics/bandit_report.json
           python -m bandit -r src/ -c .bandit
 
+      # ---- tests ----
+      - name: Run unit tests
+        run: python -m pytest -m "not integration" -q
+
+      - name: Run integration tests
+        run: python -m pytest -m integration -q
+
+      # ---- audit dependencies ----
       - name: Generate pip-audit report
         run: python -m pip_audit -r requirements.txt -f json -o metrics/pip_audit_report.json || true
 
       - name: Enforce audit policy
         run: python scripts/audit_policy.py --report metrics/pip_audit_report.json
 
+      # ---- data gate ----
+      - name: Data gate (train sample)
+        run: python scripts/data_gate.py --config configs/data_gate.yaml
+
       - name: Verify CI data integrity
         run: |
           cd ci_data
           sha256sum -c CHECKSUMS.sha256
-
-      - name: Run unit tests
-        run: python -m pytest -m "not integration" -q
-
-      - name: Run integration tests
-        run: python -m pytest -m integration -q
 
       - name: Demo — gate must reject broken data
         run: |
@@ -68,10 +76,17 @@ jobs:
             echo "OK: gate correctly rejected broken data"
           fi
 
+      # ---- eval + model gate ----
+      - name: Train on CI sample
+        run: python -m src.train --artifacts ci_data --seed 42
+
+      - name: Evaluate on CI test
+        run: python -m src.ci_eval --artifacts ci_data --data ci_data/test.parquet --out metrics/ci_metrics.json
+
       - name: Evaluate candidate on fixed test
         run: python scripts/eval_candidate.py --policy configs/regression_policy.yaml
 
-      - name: Compare candidate vs baseline
+      - name: Compare candidate vs baseline (model gate)
         run: python scripts/compare_models.py --policy configs/regression_policy.yaml
 
       - name: Demo — regression gate rejects weak candidate
@@ -85,29 +100,54 @@ jobs:
             echo "OK: weak candidate correctly rejected"
           fi
 
-      - name: Train on CI sample
-        run: python -m src.train --artifacts ci_data --seed 42
+      # ---- сохранить commit и SHA256 модели (всегда) ----
+      - name: Save commit and model hashes
+        if: always()
+        run: |
+          mkdir -p artifacts
+          {
+            echo "commit=$(git rev-parse HEAD)"
+            echo "branch=${GITHUB_REF_NAME}"
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "actor=${GITHUB_ACTOR}"
+            echo "generated_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > artifacts/ci_commit.txt
+          sha256sum models/*.joblib > artifacts/model_sha256.txt 2>/dev/null || true
+          cat artifacts/ci_commit.txt
+          cat artifacts/model_sha256.txt
 
-      - name: Evaluate on CI test
-        run: python -m src.ci_eval --artifacts ci_data --data ci_data/test.parquet --out metrics/ci_metrics.json
-
+      # ---- upload отчётов (всегда, даже при падении) ----
       - name: Upload artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ci-artifacts
+          name: ci-artifacts-${{ github.run_id }}
           path: |
+            artifacts/ci_commit.txt
+            artifacts/model_sha256.txt
+            metrics/bandit_report.json
+            metrics/pip_audit_report.json
+            metrics/ci_metrics.json
+            metrics/candidate.json
+            metrics/candidate_weak.json
+            metrics/comparison.json
+            metrics/comparison_weak.json
+            metrics/baseline.json
             ci_data/lab2_span_tfidf.joblib
             ci_data/lab2_span_logreg.joblib
-            metrics/ci_metrics.json
-          if-no-files-found: error
+          if-no-files-found: warn
 
+  # ============================================================
+  # Job 2: Docker build, scan, smoke — только после test-and-eval
+  # ============================================================
   docker:
     runs-on: ubuntu-24.04
     needs: test-and-eval
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout
+        uses: actions/checkout@v5
 
       - name: Build Docker image
         run: docker build -t ml-project:lab3 .
@@ -133,7 +173,6 @@ jobs:
           print("smoke OK:", d[0])
           PY
 
-
       - name: Trivy image scan (CRITICAL gate)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -154,3 +193,13 @@ jobs:
           version: "v0.74.0"
           format: json
           output: metrics/trivy_config_${{ github.run_id }}.json
+
+      - name: Upload Trivy + docker reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-reports-${{ github.run_id }}
+          path: |
+            metrics/trivy_image_*.json
+            metrics/trivy_config_*.json
+          if-no-files-found: warn
