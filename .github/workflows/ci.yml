@@ -141,6 +141,7 @@ jobs:
           severity: CRITICAL
           exit-code: "1"
           trivyignore: .trivyignore.yaml
+          version: "0.74.0"
           format: json
           output: metrics/trivy_image_${{ github.run_id }}.json
 
@@ -150,5 +151,6 @@ jobs:
           scan-type: config
           scan-ref: Dockerfile
           exit-code: "1"
+          version: "0.74.0"
           format: json
           output: metrics/trivy_config_${{ github.run_id }}.json
