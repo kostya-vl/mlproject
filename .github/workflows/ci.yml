@@ -234,17 +234,23 @@ jobs:
 
       - name: Smoke via uvicorn
         run: |
-          MODELS_DIR=models uvicorn app.app:app --host 127.0.0.1 --port 8000 &
+          MODELS_DIR=models uvicorn app.app:app --host 127.0.0.1 --port 8000 >/tmp/uvicorn.log 2>&1 &
+          UV_PID=$!
           sleep 5
-          curl -fsS http://127.0.0.1:8000/health | tee /tmp/health.json
+          curl -fsS http://127.0.0.1:8000/health -o /tmp/health.json
           curl -fsS -X POST http://127.0.0.1:8000/predict \
             -H 'content-type: application/json' \
-            -d '{"spans":["ivan.petrov@example.com"]}' | tee /tmp/pred.json
+            -H 'X-Request-ID: ci-smoke-001' \
+            -d '{"spans":["ivan.petrov@example.com"]}' -o /tmp/pred.json
           python - <<'PY'
           import json
           h = json.load(open("/tmp/health.json"))
           p = json.load(open("/tmp/pred.json"))
-          assert h["status"] == "ok" and h["model_loaded"] is True
-          assert p["predictions"][0]["label"]
-          print("api smoke OK")
+          assert h["status"] == "healthy", h
+          assert h.get("model_version"), h
+          assert p["request_id"] == "ci-smoke-001", p
+          assert p["model_version"], p
+          assert p["predictions"][0]["label"], p
+          print("api smoke OK:", p["predictions"][0])
           PY
+          kill "$UV_PID" || true
