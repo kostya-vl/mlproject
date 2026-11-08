@@ -1,10 +1,11 @@
 """
 FastAPI-сервис предсказаний (ЛР4).
 
-- модель загружается ОДИН РАЗ при старте (lifespan);
-- SHA-256 артефактов сверяется с models/SHA256SUMS ДО загрузки;
-- при несовпадении/ошибке сервис не готов (`/health` → 503);
-- предобработка и предсказание — из src.predictor (ЛР2), та же схема входа.
+- POST /predict: JSON {"spans": ["...", ...]} → {"predictions": [...], "model_version": "...", "request_id": "..."}.
+  Та же схема входа и предобработка, что в src.predictor (ЛР2).
+- GET /health: 200 + {"status": "healthy", "model_version": "..."} только когда модель загружена;
+  503 + {"status": "unhealthy"} иначе. Пути/секреты/детали инфраструктуры в ответ не попадают.
+- Модель загружается ОДИН РАЗ при старте; SHA-256 сверяется с models/SHA256SUMS ДО загрузки.
 """
 from __future__ import annotations
 
@@ -15,15 +16,20 @@ os.environ.setdefault("ARROW_USER_SIMD_LEVEL", "NONE")
 import hashlib
 import logging
 import sys
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
-from app.schemas import HealthResponse, PredictRequest, PredictResponse
+from app.schemas import (
+    HealthResponse,
+    Prediction,  # noqa: F401 — реэкспорт для удобства клиентов
+    PredictRequest,
+    PredictResponse,
+)
 
-# корень проекта в sys.path (app/ лежит на уровень ниже)
 _root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_root))
 
@@ -49,7 +55,6 @@ def _sha256(path: Path) -> str:
 
 
 def _verify_and_load() -> str:
-    """Сверить SHA256 с эталоном, затем загрузить модель. Возвращает version."""
     if not CHECKSUMS.exists():
         raise RuntimeError(f"эталон SHA256 не найден: {CHECKSUMS}")
     expected = {}
@@ -96,38 +101,53 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="PII span predictor", version="1.0", lifespan=lifespan)
 
 
-def _require_ready() -> None:
+def _request_id(request: Request) -> str:
+    return request.headers.get("x-request-id") or str(uuid.uuid4())
+
+
+def _require_ready(request_id: str) -> None:
     if not STATE["ready"]:
-        raise HTTPException(status_code=503,
-                            detail=f"service not ready: {STATE['reason']}")
+        logger.warning("service not ready request_id=%s", request_id)
+        # Никаких путей/причин в ответе — только общий статус.
+        raise HTTPException(status_code=503, detail="service not ready")
 
 
 @app.get("/health", response_model=HealthResponse)
 def health():
     if not STATE["ready"]:
+        # Причина пишется в лог при старте, в ответ не попадает.
         return JSONResponse(status_code=503,
-                            content={"status": "unavailable",
-                                     "model_loaded": False,
-                                     "model_version": None,
-                                     "reason": STATE["reason"]})
-    return {"status": "ok", "model_loaded": True,
-            "model_version": STATE["model_version"]}
+                            content={"status": "unhealthy", "model_version": None})
+    return {"status": "healthy", "model_version": STATE["model_version"]}
 
 
 @app.post("/predict", response_model=PredictResponse)
-def do_predict(req: PredictRequest, request: Request):
-    _require_ready()
+def do_predict(req: PredictRequest, request: Request, response: Response):
+    rid = _request_id(request)
+    response.headers["X-Request-ID"] = rid
+    _require_ready(rid)
     try:
         preds = predict(req.spans)
     except PredictorError as e:
-        logger.warning("predict rejected: code=%s msg=%s client=%s",
-                       e.code, e, request.client)
-        raise HTTPException(status_code=422, detail={"code": e.code, "message": str(e)}) from e
-    logger.info("predict OK: n=%d client=%s", len(preds), request.client)
-    return {"predictions": preds, "model_version": STATE["model_version"]}
+        logger.warning("predict rejected request_id=%s code=%s msg=%s client=%s",
+                       rid, e.code, e, request.client)
+        raise HTTPException(
+            status_code=422,
+            detail={"code": e.code, "message": str(e), "request_id": rid},
+            headers={"X-Request-ID": rid},
+        ) from e
+    logger.info("predict OK request_id=%s n=%d client=%s",
+                rid, len(preds), request.client)
+    return {
+        "predictions": preds,
+        "model_version": STATE["model_version"],
+        "request_id": rid,
+    }
 
 
 @app.exception_handler(HTTPException)
 async def http_exc_handler(request: Request, exc: HTTPException):
-    logger.warning("http %d %s %s", exc.status_code, request.url.path, exc.detail)
+    rid = request.headers.get("x-request-id", "-")
+    logger.warning("http %d %s %s request_id=%s",
+                   exc.status_code, request.url.path, exc.detail, rid)
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
