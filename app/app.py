@@ -26,7 +26,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
 from app.auth import require_token
@@ -54,36 +56,7 @@ logging.basicConfig(level=logging.INFO,
 
 STATE = {"ready": False, "model_version": None, "reason": None, "sem": None}
 
-INDEX_HTML = """<!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><title>PII span predictor — demo</title></head>
-<body>
-<h1>PII span predictor — demo</h1>
-<p>Токен вводится вручную и хранится только в памяти вкладки. Он не встраивается
-в HTML/JS, не пишется в localStorage и не передаётся в URL.</p>
-<label>API token: <input id="tok" type="password" autocomplete="off"></label><br><br>
-<label>Spans (по одному на строку):<br>
-<textarea id="spans" rows="6" cols="50">ivan.petrov@example.com
-+7 900 123-45-678</textarea></label><br>
-<button id="go">Predict</button>
-<pre id="out"></pre>
-<script>
-document.getElementById('go').onclick = async () => {
-  const tok = document.getElementById('tok').value;   // только в памяти JS
-  const spans = document.getElementById('spans').value.split('\\n').filter(Boolean);
-  try {
-    const r = await fetch('/predict', {
-      method: 'POST',
-      headers: {'content-type': 'application/json', 'X-API-Key': tok},
-      body: JSON.stringify({spans})
-    });
-    const body = await r.json();
-    document.getElementById('out').textContent = r.status + '\\n' + JSON.stringify(body, null, 2);
-  } catch (e) {
-    document.getElementById('out').textContent = 'error: ' + e;
-  }
-};
-</script>
-</body></html>"""
+STATIC_DIR = _root / "static"
 
 
 def _sha256(path: Path) -> str:
@@ -140,6 +113,20 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="PII span predictor", version="1.0", lifespan=lifespan)
 app.add_middleware(BodySizeLimitMiddleware, max_bytes=MAX_BODY_BYTES)
 
+# UI отдаётся тем же приложением (same-origin => отдельный CORS не нужен).
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+# Опциональный CORS — ТОЛЬКО если UI на другом origin и явно задан CORS_ORIGIN.
+_cors_origin = os.environ.get("CORS_ORIGIN")
+if _cors_origin:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[_cors_origin],   # один конкретный origin, не "*"
+        allow_methods=["POST"],
+        allow_headers=["content-type", "x-api-key", "x-request-id"],
+        allow_credentials=False,
+    )
+
 
 def _request_id(request: Request) -> str:
     return request.headers.get("x-request-id") or str(uuid.uuid4())
@@ -153,7 +140,7 @@ def _require_ready(rid: str) -> None:
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    return HTMLResponse(INDEX_HTML)
+    return HTMLResponse((STATIC_DIR / "index.html").read_text(encoding="utf-8"))
 
 
 @app.get("/health", response_model=HealthResponse)

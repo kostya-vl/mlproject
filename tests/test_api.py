@@ -127,3 +127,24 @@ def test_rate_limit_429(client, monkeypatch):
     r = client.post("/predict", json={"spans": ["a@b.com"]})
     assert r.status_code == 429
     assert r.headers.get("Retry-After")
+
+def test_index_served(client):
+    r = client.get("/")
+    assert r.status_code == 200
+    assert "text/html" in r.headers["content-type"]
+    assert "/static/app.js" in r.text
+    assert API_TOKEN not in r.text  # токен не встраивается в HTML
+
+
+def test_static_assets_served(client):
+    for path in ("/static/app.js", "/static/style.css"):
+        r = client.get(path)
+        assert r.status_code == 200, path
+
+
+def test_static_js_does_not_leak_token(client):
+    r = client.get("/static/app.js")
+    assert r.status_code == 200
+    assert API_TOKEN not in r.text
+    assert "localStorage" in r.text  # упомянут только в комментарии про «не хранить»
+

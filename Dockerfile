@@ -27,6 +27,7 @@ COPY src/__init__.py src/predictor.py src/preprocessing.py ./src/
 
 # CLI для smoke-проверки
 COPY scripts/predict_cli.py ./scripts/predict_cli.py
+COPY static/ ./static/
 
 # Модель: явный список файлов (контроль включения)
 COPY models/lab2_span_tfidf.joblib  ./models/

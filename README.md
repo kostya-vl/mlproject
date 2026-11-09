@@ -196,3 +196,18 @@ sha256sum -c SHA256SUMS
 ### Замаскированные значения (для отчёта)
 
 `API_TOKEN=demo-***` (8 символов, показаны только первые 4), `X-API-Key: demo-***`.
+
+## Веб-интерфейс и CORS (ЛР4, задание 5)
+
+- UI: `static/index.html`, `static/app.js`, `static/style.css`; отдаётся **тем же**
+  приложением (`app.mount("/static", StaticFiles(...))`, `GET /` → `static/index.html`).
+- Форма: токен (`type=password`, только в памяти JS), textarea спанов, кнопка Predict.
+- Отправка: `POST /predict` (`content-type: application/json`, `X-API-Key`).
+- Состояния: waiting (`Отправка запроса…`), validation error (пустой/слишком много
+  спанов — до отправки), 401 (нет доступа), 429 (лимит, показывается `Retry-After`),
+  413/415/400/422/503/504 — понятные сообщения без traceback.
+- Недоверенный JSON рендерится через `textContent` (не `innerHTML`); токен
+  не пишется в `localStorage`, не передаётся в URL, не встраивается в HTML/JS.
+- CORS: для same-origin (`/` и `/predict` на одном хосте) **не требуется**.
+  Если UI на другом origin — задайте `CORS_ORIGIN=https://ui.example` (один
+  конкретный origin, не `*`); middleware включится только при наличии env.
