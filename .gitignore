@@ -32,3 +32,7 @@ id_rsa
 # Модели нужны Docker-образу и integration-тестам
 !models/*.joblib
 !models/SHA256SUMS
+
+# monitoring secrets
+.env.monitoring
+monitoring/prometheus/metrics_token

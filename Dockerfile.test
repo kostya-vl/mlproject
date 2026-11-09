@@ -1,0 +1,7 @@
+FROM ml-project:lab4
+USER root
+COPY tests/ ./tests/
+COPY pytest.ini ./
+RUN pip install --no-cache-dir pytest httpx2
+USER 10001:10001
+ENTRYPOINT ["python", "-m", "pytest"]

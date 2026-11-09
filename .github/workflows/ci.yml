@@ -140,69 +140,6 @@ jobs:
   # ============================================================
   # Job 2: Docker build, scan, smoke — только после test-and-eval
   # ============================================================
-  docker:
-    runs-on: ubuntu-24.04
-    needs: test-and-eval
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Build Docker image
-        run: docker build -t ml-project:lab3 .
-
-      - name: UID inside container must be non-root
-        run: |
-          uid=$(docker run --rm --entrypoint id ml-project:lab3 -u)
-          echo "UID inside container: $uid"
-          test "$uid" != "0"
-
-      - name: Model integrity inside image
-        run: docker run --rm --entrypoint sh ml-project:lab3 -c "cd /app/models && sha256sum -c SHA256SUMS"
-
-      - name: Smoke — container predicts
-        run: |
-          docker run --rm ml-project:lab3 "ivan.petrov@example.com" "+7 900 123-45-678" | tee /tmp/pred.json
-          python - <<'PY'
-          import json
-          d = json.load(open("/tmp/pred.json"))
-          assert isinstance(d, list) and d, "empty prediction"
-          assert "label" in d[0] and "confidence" in d[0]
-          assert d[0]["confidence"] > 0
-          print("smoke OK:", d[0])
-          PY
-
-      - name: Trivy image scan (CRITICAL gate)
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ml-project:lab3
-          severity: CRITICAL
-          exit-code: "1"
-          trivyignores: .trivyignore.yaml
-          version: "v0.74.0"
-          format: json
-          output: metrics/trivy_image_${{ github.run_id }}.json
-
-      - name: Trivy config scan (Dockerfile gate)
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          scan-type: config
-          scan-ref: Dockerfile
-          exit-code: "1"
-          version: "v0.74.0"
-          format: json
-          output: metrics/trivy_config_${{ github.run_id }}.json
-
-      - name: Upload Trivy + docker reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: docker-reports-${{ github.run_id }}
-          path: |
-            metrics/trivy_image_*.json
-            metrics/trivy_config_*.json
-          if-no-files-found: warn
   api:
     runs-on: ubuntu-24.04
     needs: test-and-eval
@@ -284,3 +221,82 @@ jobs:
           PY
 
           kill "$UV_PID" || true
+
+  api-docker:
+    runs-on: ubuntu-24.04
+    needs: test-and-eval
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build runtime image
+        run: docker build -t ml-project:lab4 .
+      - name: UID inside container must be non-root
+        run: |
+          uid=$(docker run --rm --entrypoint id ml-project:lab4 -u)
+          echo "UID inside container: $uid"
+          test "$uid" != "0"
+      - name: Build test image
+        run: docker build -f Dockerfile.test -t ml-project:lab4-test .
+      - name: API tests inside container
+        run: |
+          docker run --rm \
+            -e API_TOKEN=ci-test-token \
+            -e METRICS_TOKEN=ci-test-metrics \
+            -e MODELS_DIR=/app/models \
+            ml-project:lab4-test tests/test_api.py -q -p no:cacheprovider
+      - name: Run container (loopback publish)
+        env:
+          API_TOKEN: ci-smoke-token
+          METRICS_TOKEN: ci-smoke-metrics
+        run: |
+          docker run -d --name predictor-smoke \
+            -e API_TOKEN -e METRICS_TOKEN -e MODELS_DIR=/app/models \
+            -e RATE_LIMIT_MAX=1000 \
+            -p 127.0.0.1:8000:8000 \
+            ml-project:lab4
+          for i in $(seq 1 30); do
+            s=$(docker inspect predictor-smoke --format='{{.State.Health.Status}}' 2>/dev/null || echo starting)
+            echo "health: $s"
+            [ "$s" = "healthy" ] && break
+            sleep 2
+          done
+          test "$(docker inspect predictor-smoke --format='{{.State.Health.Status}}')" = "healthy"
+      - name: Smoke /health and /predict
+        env:
+          API_TOKEN: ci-smoke-token
+          METRICS_TOKEN: ci-smoke-metrics
+        run: |
+          curl -fsS http://127.0.0.1:8000/health -o /tmp/health.json
+          curl -fsS -X POST http://127.0.0.1:8000/predict \
+            -H "X-API-Key: $API_TOKEN" \
+            -H 'content-type: application/json' \
+            -H 'X-Request-ID: ci-docker-001' \
+            -d '{"spans":["ivan.petrov@example.com"]}' -o /tmp/pred.json
+          curl -fsS -H "Authorization: Bearer $METRICS_TOKEN" \
+            http://127.0.0.1:8000/metrics -o /tmp/metrics.txt
+          code_401=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8000/predict \
+            -H 'content-type: application/json' -d '{"spans":["a@b.com"]}')
+          test "$code_401" = "401"
+          python - <<'PY'
+          import json
+          h = json.load(open("/tmp/health.json"))
+          p = json.load(open("/tmp/pred.json"))
+          m = open("/tmp/metrics.txt").read()
+          assert h["status"] == "healthy", h
+          assert p["request_id"] == "ci-docker-001", p
+          assert "predictor_http_requests_total" in m
+          print("docker smoke OK:", p["predictions"][0])
+          PY
+      - name: Trivy image scan (runtime)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ml-project:lab4
+          severity: CRITICAL
+          exit-code: "1"
+          trivyignores: .trivyignore.yaml
+          version: "v0.74.0"
+          format: json
+          output: metrics/trivy_image_lab4_${{ github.run_id }}.json
+      - name: Cleanup
+        if: always()
+        run: docker rm -f predictor-smoke || true

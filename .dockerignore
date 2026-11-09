@@ -25,7 +25,6 @@ ci_data
 artifacts
 metrics
 configs
-tests
 
 # Скрипты, кроме predict_cli.py
 scripts/*
@@ -34,9 +33,7 @@ scripts/*
 # Документация, конфиги линтеров, lock-файлы
 *.md
 README.md
-pyproject.toml
 .bandit
-pytest.ini
 requirements.txt
 requirements.lock.txt
 
