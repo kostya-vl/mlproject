@@ -1,11 +1,11 @@
 """
 FastAPI-сервис предсказаний (ЛР4).
 
-- POST /predict: JSON {"spans": ["...", ...]} → {"predictions": [...], "model_version": "...", "request_id": "..."}.
-  Та же схема входа и предобработка, что в src.predictor (ЛР2).
-- GET /health: 200 + {"status": "healthy", "model_version": "..."} только когда модель загружена;
-  503 + {"status": "unhealthy"} иначе. Пути/секреты/детали инфраструктуры в ответ не попадают.
-- Модель загружается ОДИН РАЗ при старте; SHA-256 сверяется с models/SHA256SUMS ДО загрузки.
+POST /predict: JSON {"spans": [...]} → {"predictions", "model_version", "request_id"}.
+Коды: 200 ok, 400 malformed JSON, 413 body too large, 415 unsupported media,
+      422 invalid schema, 503 not ready, 504 timeout.
+GET  /health: 200 {"status":"healthy","model_version"} | 503 {"status":"unhealthy"}.
+Модель загружается ОДИН РАЗ при старте; SHA-256 сверяется до загрузки.
 """
 from __future__ import annotations
 
@@ -13,7 +13,9 @@ import os
 
 os.environ.setdefault("ARROW_USER_SIMD_LEVEL", "NONE")
 
+import asyncio
 import hashlib
+import json
 import logging
 import sys
 import uuid
@@ -22,13 +24,15 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
-from app.schemas import (
-    HealthResponse,
-    Prediction,  # noqa: F401 — реэкспорт для удобства клиентов
-    PredictRequest,
-    PredictResponse,
+from app.limits import (
+    MAX_BODY_BYTES,
+    MAX_CONCURRENT_REQUESTS,
+    REQUEST_TIMEOUT_SEC,
 )
+from app.middleware import BodySizeLimitMiddleware
+from app.schemas import HealthResponse, PredictRequest, PredictResponse
 
 _root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_root))
@@ -43,7 +47,7 @@ logger = logging.getLogger("predictor.api")
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
-STATE = {"ready": False, "model_version": None, "reason": None}
+STATE = {"ready": False, "model_version": None, "reason": None, "sem": None}
 
 
 def _sha256(path: Path) -> str:
@@ -62,7 +66,6 @@ def _verify_and_load() -> str:
         parts = line.split()
         if len(parts) == 2:
             expected[parts[1]] = parts[0]
-
     model_version = None
     for name, exp in expected.items():
         p = MODELS_DIR / name
@@ -75,7 +78,6 @@ def _verify_and_load() -> str:
             model_version = actual[:12]
     if model_version is None:
         raise RuntimeError("в SHA256SUMS нет lab2_span_* артефактов")
-
     pred_mod._DEFAULT_ART = MODELS_DIR
     pred_mod._VECTORIZER = None
     pred_mod._MODEL = None
@@ -86,6 +88,7 @@ def _verify_and_load() -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    STATE["sem"] = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
     logger.info("startup: verify+load from %s", MODELS_DIR)
     try:
         version = _verify_and_load()
@@ -99,50 +102,78 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="PII span predictor", version="1.0", lifespan=lifespan)
+app.add_middleware(BodySizeLimitMiddleware, max_bytes=MAX_BODY_BYTES)
 
 
 def _request_id(request: Request) -> str:
     return request.headers.get("x-request-id") or str(uuid.uuid4())
 
 
-def _require_ready(request_id: str) -> None:
+def _require_ready(rid: str) -> None:
     if not STATE["ready"]:
-        logger.warning("service not ready request_id=%s", request_id)
-        # Никаких путей/причин в ответе — только общий статус.
+        logger.warning("service not ready request_id=%s", rid)
         raise HTTPException(status_code=503, detail="service not ready")
 
 
 @app.get("/health", response_model=HealthResponse)
 def health():
     if not STATE["ready"]:
-        # Причина пишется в лог при старте, в ответ не попадает.
         return JSONResponse(status_code=503,
                             content={"status": "unhealthy", "model_version": None})
     return {"status": "healthy", "model_version": STATE["model_version"]}
 
 
 @app.post("/predict", response_model=PredictResponse)
-def do_predict(req: PredictRequest, request: Request, response: Response):
+async def do_predict(request: Request, response: Response):
     rid = _request_id(request)
     response.headers["X-Request-ID"] = rid
     _require_ready(rid)
+
+    # 415: только application/json
+    ctype = (request.headers.get("content-type") or "").split(";")[0].strip().lower()
+    if ctype != "application/json":
+        logger.warning("unsupported media request_id=%s ctype=%s", rid, ctype)
+        raise HTTPException(status_code=415, detail="content-type must be application/json")
+
+    # 400: malformed JSON (Pydantic вернул бы 422, но 400 точнее для синтаксиса)
+    raw = await request.body()
     try:
-        preds = predict(req.spans)
-    except PredictorError as e:
-        logger.warning("predict rejected request_id=%s code=%s msg=%s client=%s",
-                       rid, e.code, e, request.client)
-        raise HTTPException(
-            status_code=422,
-            detail={"code": e.code, "message": str(e), "request_id": rid},
-            headers={"X-Request-ID": rid},
-        ) from e
-    logger.info("predict OK request_id=%s n=%d client=%s",
-                rid, len(preds), request.client)
-    return {
-        "predictions": preds,
-        "model_version": STATE["model_version"],
-        "request_id": rid,
-    }
+        payload = json.loads(raw)
+    except json.JSONDecodeError as e:
+        logger.warning("malformed JSON request_id=%s err=%s", rid, e)
+        raise HTTPException(status_code=400, detail="malformed JSON") from e
+
+    # 422: схема/типы/NaN/Inf/лимиты — через Pydantic + src.predictor
+    try:
+        req = PredictRequest.model_validate(payload)
+    except Exception as e:
+        logger.warning("schema rejected request_id=%s err=%s", rid, e)
+        raise HTTPException(status_code=422, detail="invalid request schema") from e
+
+    # Параллелизм + timeout: клиентский timeout не останавливает вычисление,
+    # поэтому ограничиваем на сервере. По таймауту поток освобождается.
+    sem: asyncio.Semaphore = STATE["sem"]
+    async with sem:
+        try:
+            preds = await asyncio.wait_for(
+                run_in_threadpool(predict, req.spans),
+                timeout=REQUEST_TIMEOUT_SEC,
+            )
+        except TimeoutError as e:
+            logger.warning("timeout request_id=%s", rid)
+            raise HTTPException(status_code=504, detail="prediction timeout") from e
+        except PredictorError as e:
+            logger.warning("predict rejected request_id=%s code=%s msg=%s",
+                           rid, e.code, e)
+            raise HTTPException(
+                status_code=422,
+                detail={"code": e.code, "message": str(e), "request_id": rid},
+                headers={"X-Request-ID": rid},
+            ) from e
+
+    logger.info("predict OK request_id=%s n=%d", rid, len(preds))
+    return {"predictions": preds, "model_version": STATE["model_version"],
+            "request_id": rid}
 
 
 @app.exception_handler(HTTPException)

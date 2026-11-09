@@ -76,3 +76,26 @@ def test_health_unhealthy_no_internal_leak(client):
     finally:
         app_module.STATE.clear()
         app_module.STATE.update(saved)
+
+def test_predict_wrong_content_type_415(client):
+    r = client.post("/predict", data="x", headers={"content-type": "text/plain"})
+    assert r.status_code == 415
+
+
+def test_predict_malformed_json_400(client):
+    r = client.post("/predict", content=b"{not json",
+                    headers={"content-type": "application/json"})
+    assert r.status_code == 400
+
+
+def test_predict_body_too_large_413(client):
+    big = "x" * (2 * 1024 * 1024)  # 2 МБ > MAX_BODY_BYTES
+    r = client.post("/predict", content=big.encode(),
+                    headers={"content-type": "application/json"})
+    assert r.status_code == 413
+
+
+def test_predict_nan_rejected_422(client):
+    r = client.post("/predict", json={"spans": [None]})
+    assert r.status_code == 422
+
