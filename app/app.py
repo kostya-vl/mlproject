@@ -1,10 +1,13 @@
 """
 FastAPI-сервис предсказаний (ЛР4).
 
-POST /predict: JSON {"spans": [...]} → {"predictions", "model_version", "request_id"}.
-Коды: 200 ok, 400 malformed JSON, 413 body too large, 415 unsupported media,
-      422 invalid schema, 503 not ready, 504 timeout.
-GET  /health: 200 {"status":"healthy","model_version"} | 503 {"status":"unhealthy"}.
+- POST /predict: JSON {"spans": [...]} + заголовок X-API-Key.
+  Коды: 200 ok, 400 malformed JSON, 401 bad/missing token, 413 body too large,
+        415 unsupported media, 422 schema/NaN/лимиты, 429 rate limit,
+        503 not ready / auth not configured, 504 timeout.
+- GET  /health: 200 {"status":"healthy","model_version"} | 503 {"status":"unhealthy"}.
+- GET  /: демо-страница (токен вводится вручную, не встраивается в HTML/JS,
+         не в localStorage, не в URL).
 Модель загружается ОДИН РАЗ при старте; SHA-256 сверяется до загрузки.
 """
 from __future__ import annotations
@@ -22,16 +25,18 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.concurrency import run_in_threadpool
 
+from app.auth import require_token
 from app.limits import (
     MAX_BODY_BYTES,
     MAX_CONCURRENT_REQUESTS,
     REQUEST_TIMEOUT_SEC,
 )
 from app.middleware import BodySizeLimitMiddleware
+from app.ratelimit import rate_limit
 from app.schemas import HealthResponse, PredictRequest, PredictResponse
 
 _root = Path(__file__).resolve().parent.parent
@@ -48,6 +53,37 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
 STATE = {"ready": False, "model_version": None, "reason": None, "sem": None}
+
+INDEX_HTML = """<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>PII span predictor — demo</title></head>
+<body>
+<h1>PII span predictor — demo</h1>
+<p>Токен вводится вручную и хранится только в памяти вкладки. Он не встраивается
+в HTML/JS, не пишется в localStorage и не передаётся в URL.</p>
+<label>API token: <input id="tok" type="password" autocomplete="off"></label><br><br>
+<label>Spans (по одному на строку):<br>
+<textarea id="spans" rows="6" cols="50">ivan.petrov@example.com
++7 900 123-45-678</textarea></label><br>
+<button id="go">Predict</button>
+<pre id="out"></pre>
+<script>
+document.getElementById('go').onclick = async () => {
+  const tok = document.getElementById('tok').value;   // только в памяти JS
+  const spans = document.getElementById('spans').value.split('\\n').filter(Boolean);
+  try {
+    const r = await fetch('/predict', {
+      method: 'POST',
+      headers: {'content-type': 'application/json', 'X-API-Key': tok},
+      body: JSON.stringify({spans})
+    });
+    const body = await r.json();
+    document.getElementById('out').textContent = r.status + '\\n' + JSON.stringify(body, null, 2);
+  } catch (e) {
+    document.getElementById('out').textContent = 'error: ' + e;
+  }
+};
+</script>
+</body></html>"""
 
 
 def _sha256(path: Path) -> str:
@@ -115,6 +151,11 @@ def _require_ready(rid: str) -> None:
         raise HTTPException(status_code=503, detail="service not ready")
 
 
+@app.get("/", response_class=HTMLResponse)
+def index():
+    return HTMLResponse(INDEX_HTML)
+
+
 @app.get("/health", response_model=HealthResponse)
 def health():
     if not STATE["ready"]:
@@ -123,19 +164,21 @@ def health():
     return {"status": "healthy", "model_version": STATE["model_version"]}
 
 
-@app.post("/predict", response_model=PredictResponse)
+@app.post(
+    "/predict",
+    response_model=PredictResponse,
+    dependencies=[Depends(require_token), Depends(rate_limit)],
+)
 async def do_predict(request: Request, response: Response):
     rid = _request_id(request)
     response.headers["X-Request-ID"] = rid
     _require_ready(rid)
 
-    # 415: только application/json
     ctype = (request.headers.get("content-type") or "").split(";")[0].strip().lower()
     if ctype != "application/json":
         logger.warning("unsupported media request_id=%s ctype=%s", rid, ctype)
         raise HTTPException(status_code=415, detail="content-type must be application/json")
 
-    # 400: malformed JSON (Pydantic вернул бы 422, но 400 точнее для синтаксиса)
     raw = await request.body()
     try:
         payload = json.loads(raw)
@@ -143,15 +186,12 @@ async def do_predict(request: Request, response: Response):
         logger.warning("malformed JSON request_id=%s err=%s", rid, e)
         raise HTTPException(status_code=400, detail="malformed JSON") from e
 
-    # 422: схема/типы/NaN/Inf/лимиты — через Pydantic + src.predictor
     try:
         req = PredictRequest.model_validate(payload)
     except Exception as e:
         logger.warning("schema rejected request_id=%s err=%s", rid, e)
         raise HTTPException(status_code=422, detail="invalid request schema") from e
 
-    # Параллелизм + timeout: клиентский timeout не останавливает вычисление,
-    # поэтому ограничиваем на сервере. По таймауту поток освобождается.
     sem: asyncio.Semaphore = STATE["sem"]
     async with sem:
         try:
@@ -181,4 +221,8 @@ async def http_exc_handler(request: Request, exc: HTTPException):
     rid = request.headers.get("x-request-id", "-")
     logger.warning("http %d %s %s request_id=%s",
                    exc.status_code, request.url.path, exc.detail, rid)
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=exc.headers,  # сохраняем WWW-Authenticate, Retry-After, X-Request-ID
+    )

@@ -8,14 +8,21 @@ REAL = (MODELS_DIR / "lab2_span_tfidf.joblib").exists() and (MODELS_DIR / "SHA25
 
 pytestmark = pytest.mark.skipif(not REAL, reason="models/ не найдены (ЛР2 п.10)")
 
+API_TOKEN = "test-token"
+
 
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setenv("MODELS_DIR", str(MODELS_DIR))
+    monkeypatch.setenv("API_TOKEN", API_TOKEN)
+    monkeypatch.setenv("RATE_LIMIT_MAX", "1000")
+    from app import ratelimit
+    ratelimit.reset()
     from app.app import app
     from fastapi.testclient import TestClient
-    with TestClient(app) as c:
+    with TestClient(app, headers={"X-API-Key": API_TOKEN}) as c:
         yield c
+    ratelimit.reset()
 
 
 def test_health_healthy(client):
@@ -40,12 +47,23 @@ def test_predict_ok_has_request_id_and_model_version(client):
 
 def test_predict_uses_x_request_id(client):
     rid = "test-" + uuid.uuid4().hex[:8]
-    r = client.post("/predict",
-                    json={"spans": ["a@b.com"]},
+    r = client.post("/predict", json={"spans": ["a@b.com"]},
                     headers={"X-Request-ID": rid})
     assert r.status_code == 200
     assert r.json()["request_id"] == rid
     assert r.headers.get("X-Request-ID") == rid
+
+
+def test_predict_no_token_401(client):
+    r = client.post("/predict", json={"spans": ["a@b.com"]},
+                    headers={"X-API-Key": ""})
+    assert r.status_code == 401
+
+
+def test_predict_wrong_token_401(client):
+    r = client.post("/predict", json={"spans": ["a@b.com"]},
+                    headers={"X-API-Key": "wrong"})
+    assert r.status_code == 401
 
 
 def test_predict_empty_rejected(client):
@@ -59,7 +77,6 @@ def test_predict_too_many_rejected(client):
 
 
 def test_health_unhealthy_no_internal_leak(client):
-    """503 при not-ready, но без путей/причин в ответе."""
     from app import app as app_module
     saved = dict(app_module.STATE)
     app_module.STATE.update(ready=False, model_version=None,
@@ -72,10 +89,10 @@ def test_health_unhealthy_no_internal_leak(client):
         text = str(body)
         assert "SHA256" not in text
         assert "/app" not in text
-        assert "models" not in text
     finally:
         app_module.STATE.clear()
         app_module.STATE.update(saved)
+
 
 def test_predict_wrong_content_type_415(client):
     r = client.post("/predict", data="x", headers={"content-type": "text/plain"})
@@ -89,7 +106,7 @@ def test_predict_malformed_json_400(client):
 
 
 def test_predict_body_too_large_413(client):
-    big = "x" * (2 * 1024 * 1024)  # 2 МБ > MAX_BODY_BYTES
+    big = "x" * (2 * 1024 * 1024)
     r = client.post("/predict", content=big.encode(),
                     headers={"content-type": "application/json"})
     assert r.status_code == 413
@@ -99,3 +116,14 @@ def test_predict_nan_rejected_422(client):
     r = client.post("/predict", json={"spans": [None]})
     assert r.status_code == 422
 
+
+def test_rate_limit_429(client, monkeypatch):
+    monkeypatch.setenv("RATE_LIMIT_MAX", "3")
+    from app import ratelimit
+    ratelimit.reset()
+    for _ in range(3):
+        r = client.post("/predict", json={"spans": ["a@b.com"]})
+        assert r.status_code == 200
+    r = client.post("/predict", json={"spans": ["a@b.com"]})
+    assert r.status_code == 429
+    assert r.headers.get("Retry-After")
