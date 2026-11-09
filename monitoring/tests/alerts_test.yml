@@ -1,0 +1,41 @@
+rule_files:
+  - ../prometheus/alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  # 30s samples → в delta[60s] минимум 2 точки; спайк в окне (2m, 3m]
+  - interval: 30s
+    input_series:
+      - series: 'predictor_failures_total{reason="auth"}'
+        values: '0 0 0 0 0 0 10 10 10 10 10'
+      - series: 'predictor_failures_total{reason="rate_limit"}'
+        values: '0 0 0 0 0 0 5 5 5 5 5'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: PredictorAuthFailuresSpike
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              category: auth
+              reason: auth
+            exp_annotations:
+              summary: "Серия 401 на /predict (возможен перебор токена)"
+              description: "delta(auth) за 60s превысил порог 5"
+      - eval_time: 3m
+        alertname: PredictorRateLimitSpike
+        exp_alerts:
+          - exp_labels:
+              severity: info
+              category: ratelimit
+              reason: rate_limit
+            exp_annotations:
+              summary: "Серия 429 на /predict (превышение лимита)"
+              description: "delta(rate_limit) за 60s превысил порог 3"
+      # восстановление: на 5m окно (4m, 5m] содержит только «10» — delta=0
+      - eval_time: 5m
+        alertname: PredictorAuthFailuresSpike
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: PredictorRateLimitSpike
+        exp_alerts: []

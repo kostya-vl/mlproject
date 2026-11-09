@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: predictor
+    folder: Predictor
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

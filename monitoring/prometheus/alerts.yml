@@ -1,0 +1,32 @@
+groups:
+  - name: predictor-security
+    interval: 5s
+    rules:
+      - alert: PredictorAuthFailuresSpike
+        expr: delta(predictor_failures_total{reason="auth"}[60s]) > 5
+        for: 0m
+        labels:
+          severity: warning
+          category: auth
+        annotations:
+          summary: "Серия 401 на /predict (возможен перебор токена)"
+          description: "delta(auth) за 60s превысил порог 5"
+
+      - alert: PredictorRateLimitSpike
+        expr: delta(predictor_failures_total{reason="rate_limit"}[60s]) > 3
+        for: 0m
+        labels:
+          severity: info
+          category: ratelimit
+        annotations:
+          summary: "Серия 429 на /predict (превышение лимита)"
+          description: "delta(rate_limit) за 60s превысил порог 3"
+
+      - alert: PredictorErrorRate5xx
+        expr: delta(predictor_http_requests_total{status=~"5.."}[60s]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: server
+        annotations:
+          summary: "5xx на сервисе предсказаний"

@@ -1,0 +1,50 @@
+{
+  "uid": "predictor-observability",
+  "title": "PII predictor — observability",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": {"from": "now-15m", "to": "now"},
+  "panels": [
+    {
+      "id": 1, "type": "timeseries", "title": "Requests / sec (by status)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [{
+        "refId": "A",
+        "expr": "sum by (status) (rate(predictor_http_requests_total[1m]))",
+        "legendFormat": "status={{status}}"
+      }]
+    },
+    {
+      "id": 2, "type": "timeseries", "title": "Latency p95 / p50 (/predict)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [
+        {"refId": "A",
+         "expr": "histogram_quantile(0.95, sum by (le) (rate(predictor_http_request_duration_seconds_bucket{route=\"/predict\"}[5m])))",
+         "legendFormat": "p95"},
+        {"refId": "B",
+         "expr": "histogram_quantile(0.50, sum by (le) (rate(predictor_http_request_duration_seconds_bucket{route=\"/predict\"}[5m])))",
+         "legendFormat": "p50"}
+      ]
+    },
+    {
+      "id": 3, "type": "timeseries", "title": "Rejections by reason (rate / 1m)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "targets": [{
+        "refId": "A",
+        "expr": "sum by (reason) (rate(predictor_failures_total[1m]))",
+        "legendFormat": "{{reason}}"
+      }]
+    },
+    {
+      "id": 4, "type": "stat", "title": "Active alerts",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "targets": [{
+        "refId": "A",
+        "expr": "ALERTS{alertstate=\"firing\"}",
+        "legendFormat": "{{alertname}}"
+      }],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": ""}}
+    }
+  ]
+}
