@@ -237,19 +237,39 @@ jobs:
           API_TOKEN: ci-smoke-token
           MODELS_DIR: models
           RATE_LIMIT_MAX: "1000"
+          METRICS_TOKEN: ci-metrics
         run: |
           uvicorn app.app:app --host 127.0.0.1 --port 8000 >/tmp/uvicorn.log 2>&1 &
           UV_PID=$!
           sleep 5
+
+          # 1) health
           curl -fsS http://127.0.0.1:8000/health -o /tmp/health.json
+
+          # 2) predict с токеном и X-Request-ID
           curl -fsS -X POST http://127.0.0.1:8000/predict \
             -H 'content-type: application/json' \
             -H 'X-API-Key: ci-smoke-token' \
             -H 'X-Request-ID: ci-smoke-001' \
             -d '{"spans":["ivan.petrov@example.com"]}' -o /tmp/pred.json
-          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8000/predict \
+
+          # 3) негатив: без токена → 401
+          code_401=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8000/predict \
             -H 'content-type: application/json' -d '{"spans":["a@b.com"]}')
-          test "$code" = "401"
+          test "$code_401" = "401"
+
+          # 4) метрики: без токена → 404
+          code_m0=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/metrics)
+          test "$code_m0" = "404"
+
+          # 5) метрики с токеном → 200 + ожидаемые метрики
+          curl -fsS -H "Authorization: Bearer ci-metrics" \
+            http://127.0.0.1:8000/metrics -o /tmp/metrics.txt
+          grep -q 'predictor_http_requests_total' /tmp/metrics.txt
+          grep -q 'predictor_http_request_duration_seconds' /tmp/metrics.txt
+          grep -q 'predictor_failures_total{reason="auth"}' /tmp/metrics.txt
+
+          # 6) проверки JSON и метрик через python
           python - <<'PY'
           import json
           h = json.load(open("/tmp/health.json"))
@@ -258,6 +278,9 @@ jobs:
           assert h.get("model_version"), h
           assert p["request_id"] == "ci-smoke-001", p
           assert p["predictions"][0]["label"], p
-          print("api smoke OK (auth + predict):", p["predictions"][0])
+          m = open("/tmp/metrics.txt").read()
+          assert 'predictor_failures_total{reason="auth"}' in m
+          print("api smoke OK (auth + predict + metrics):", p["predictions"][0])
           PY
+
           kill "$UV_PID" || true

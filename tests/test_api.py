@@ -197,3 +197,52 @@ def test_model_not_called_on_429(client, monkeypatch):
     assert calls["n"] == 1, "model must be called only for the first (200) request"
     ratelimit.reset()
 
+def test_metrics_requires_token(client):
+    r = client.get("/metrics")
+    assert r.status_code == 404  # без токена не подтверждаем существование
+
+
+def test_metrics_ok_with_token(client, monkeypatch):
+    monkeypatch.setenv("METRICS_TOKEN", "m-token")
+    r = client.get("/metrics", headers={"Authorization": "Bearer m-token"})
+    assert r.status_code == 200
+    assert "predictor_http_requests_total" in r.text
+
+
+def test_metrics_count_failures(client, monkeypatch):
+    """После 401 счётчик failures_total{reason="auth"} увеличивается."""
+    import re as _re
+
+    from prometheus_client import generate_latest
+
+    def auth_count(text: str) -> float:
+        m = _re.search(r'predictor_failures_total\{reason="auth"\} (\d+(?:\.\d+)?)', text)
+        return float(m.group(1)) if m else 0.0
+
+    before = auth_count(generate_latest().decode())
+    client.post("/predict", json={"spans": ["a@b.com"]},
+                headers={"X-API-Key": "wrong"})
+    after = auth_count(generate_latest().decode())
+    assert after > before, f"auth counter did not grow: {before} -> {after}"
+
+
+def test_logs_do_not_contain_pii_or_token(client, caplog):
+    import logging
+    caplog.set_level(logging.INFO, logger="predictor.access")
+    client.post("/predict", json={"spans": ["ivan.petrov@example.com"]})
+    text = "\n".join(r.getMessage() for r in caplog.records)
+    assert "ivan.petrov@example.com" not in text
+    assert API_TOKEN not in text
+    assert '"route": "/predict"' in text
+    assert '"request_id"' in text
+
+
+def test_metrics_labels_no_high_cardinality(client, monkeypatch):
+    from prometheus_client import generate_latest
+    monkeypatch.setenv("METRICS_TOKEN", "m-token")
+    client.post("/predict", json={"spans": ["a@b.com"]})
+    body = generate_latest().decode()
+    # ни request_id, ни текст спанов, ни реальные пути в labels
+    assert "request_id" not in body.split("predictor_http_requests_total")[1][:2000]
+    assert "a@b.com" not in body
+

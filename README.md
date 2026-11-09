@@ -211,3 +211,54 @@ sha256sum -c SHA256SUMS
 - CORS: для same-origin (`/` и `/predict` на одном хосте) **не требуется**.
   Если UI на другом origin — задайте `CORS_ORIGIN=https://ui.example` (один
   конкретный origin, не `*`); middleware включится только при наличии env.
+
+## Логи и метрики (ЛР4, задание 7)
+
+### Логи (JSON в stdout, `app/logging_mw.py`)
+
+Поля: `ts`, `event=request`, `request_id`, `method`, `route` (шаблон: `/predict`,
+`/health`, `/metrics`, `/`, `unmatched`), `status`, `duration_ms`, `model_version`,
+`failure_type` (`none|auth|validation|rate_limit|body_too_large|unsupported_media|
+malformed_json|not_ready|timeout`).
+
+Не логируются: содержимое входов (спаны), `X-API-Key`, персональные данные.
+`request_id` — только в логе и в заголовке `X-Request-ID`, **не** label метрики.
+
+### Метрики (`/metrics`, Prometheus, `app/metrics.py`)
+
+| Метрика | Тип | Labels |
+|---|---|---|
+| `predictor_http_requests_total` | counter | `method`, `route`, `status` |
+| `predictor_http_request_duration_seconds` | histogram | `method`, `route` |
+| `predictor_failures_total` | counter | `reason` (фиксированный набор) |
+
+Labels низкокардинальные: `route` — шаблон (не реальный путь), `status` — код,
+`reason` — из `FAILURE_REASONS`. `request_id`, тексты спанов, имена файлов — **не**
+labels (иначе неконтролируемое число временных рядов).
+
+### Защита `/metrics`
+
+- `METRICS_TOKEN` — если задан, требуется `Authorization: Bearer <token>`.
+- Иначе — только `METRICS_ALLOW_NETS` (CIDR, по умолчанию `127.0.0.1/32,::1/128`).
+- Отказ — 404 (не подтверждаем существование endpoint'а), не 403.
+
+### Что видит приложение, а что — proxy
+
+Приложение видит запросы, **дошедшие** до uvicorn. Часть отказов происходит на
+proxy и в метрики приложения **не попадает**:
+
+| Отказ | Кто возвращает | В `predictor_failures_total` |
+|---|---|---|
+| 413 body > 1 МБ | `BodySizeLimitMiddleware` (app) | `body_too_large` |
+| 413 body > `client_max_body_size` | **nginx** (proxy) | **нет** — запрос не дошёл |
+| 429 rate limit (in-memory) | `app/ratelimit.py` | `rate_limit` |
+| 429 `limit_req` на nginx | **nginx** | **нет** |
+| 401 no/bad token | `app/auth.py` | `auth` |
+| 422 schema | `app/app.py` | `validation` |
+| 504 timeout | `asyncio.wait_for` (app) | `timeout` |
+| 502/503 upstream down | **nginx** | **нет** |
+
+Поэтому proxy-отказы нужно наблюдать отдельно: nginx access/error logs,
+`nginx_http_requests_total{status="429"}` (если включён `nginx-prometheus-exporter`),
+или `limit_req_status`/`client_max_body_size` в логах nginx. В ЛР4 proxy нет —
+все отказы в метриках приложения.

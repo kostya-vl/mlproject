@@ -37,6 +37,8 @@ from app.limits import (
     MAX_CONCURRENT_REQUESTS,
     REQUEST_TIMEOUT_SEC,
 )
+from app.logging_mw import AccessLogMiddleware
+from app.metrics import metrics_endpoint
 from app.middleware import BodySizeLimitMiddleware
 from app.ratelimit import rate_limit
 from app.schemas import HealthResponse, PredictRequest, PredictResponse
@@ -112,6 +114,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="PII span predictor", version="1.0", lifespan=lifespan)
 app.add_middleware(BodySizeLimitMiddleware, max_bytes=MAX_BODY_BYTES)
+app.add_middleware(AccessLogMiddleware, get_model_version=lambda: STATE["model_version"])
 
 # UI отдаётся тем же приложением (same-origin => отдельный CORS не нужен).
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -141,6 +144,11 @@ def _require_ready(rid: str) -> None:
 @app.get("/", response_class=HTMLResponse)
 def index():
     return HTMLResponse((STATIC_DIR / "index.html").read_text(encoding="utf-8"))
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics_route(request: Request):
+    return metrics_endpoint(request)
 
 
 @app.get("/health", response_model=HealthResponse)
