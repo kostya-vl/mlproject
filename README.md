@@ -285,3 +285,59 @@ proxy и в метрики приложения **не попадает**:
 delta(predictor_failures_total{reason="auth"}[60s]) > 5
 or
 delta(predictor_failures_total{reason="rate_limit"}[60s]) > 3
+```
+
+## Запуск сервиса в Docker (ЛР4, задание 10)
+
+### Образ
+
+- `Dockerfile` — `python:3.11-slim-bookworm@sha256:a83ba18a...` (digest, Debian 12.15),
+  `requirements-runtime.txt` + `requirements-api.txt`, `USER 10001:10001`,
+  `HEALTHCHECK` на `/health`, `EXPOSE 8000`, `ENTRYPOINT uvicorn app.app:app`.
+- Модель — явным `COPY models/<file>`; `models/SHA256SUMS` сверяется при старте.
+- Секреты НЕ в образе: `API_TOKEN`, `METRICS_TOKEN` — только runtime env
+  (`--env-file`/`-e`), `.env.monitoring` (600 mluser, `.gitignore`).
+- `Dockerfile.test` — тестовый слой (`FROM ml-project:lab4` + `pytest httpx2`).
+
+### Порты
+
+| Что | Где слушает | Публикация на хосте |
+|---|---|---|
+| uvicorn | `0.0.0.0:8000` внутри контейнера | `127.0.0.1:8000` (loopback) |
+
+Снаружи порт 8000 не публикуется. UFW: `default deny incoming`, только 22/tcp.
+Доступ с Windows — через SSH-туннель: `ssh -p 2222 -L 8000:127.0.0.1:8000 mluser@127.0.0.1`.
+
+### Лимиты (runtime env)
+
+| Переменная | Значение | Смысл |
+|---|---|---|
+| `RATE_LIMIT_MAX` | 30 | запросов на ключ за окно |
+| `RATE_LIMIT_WINDOW` | 60 | окно rate limit, сек |
+| `REQUEST_TIMEOUT_SEC` | 10 | таймаут предсказания |
+| `MAX_CONCURRENT_REQUESTS` | 4 | `asyncio.Semaphore` |
+| `MAX_BODY_BYTES` | 1 МБ | лимит тела (413) |
+| `MAX_SPANS_PER_REQUEST` | 1000 | лимит спанов (422) |
+| `MAX_SPAN_LEN_CHARS` | 1000 | длина одного спана |
+| `MAX_TOTAL_CHARS` | 1 000 000 | суммарный объём текста |
+
+### Команда запуска
+
+- `cp .env.monitoring.example .env.monitoring` — секреты в `.gitignore`, `600 mluser`.
+- `docker build -t ml-project:lab4 .` — сборка.
+- `docker compose --env-file .env.monitoring -f docker-compose.app.yml up -d` — запуск.
+- `docker inspect predictor-api --format='{{.State.Health.Status}}'` → `healthy`.
+- `curl http://127.0.0.1:8000/health` → `{"status":"healthy",...}`.
+
+### API-тесты и smoke в CI
+
+Job `api-docker`: build → `UID=10001` → `Dockerfile.test` → `pytest tests/test_api.py`
+в контейнере (`-p no:cacheprovider`) → `docker run -d -p 127.0.0.1:8000:8000` →
+wait `healthy` → smoke `/health`, `/predict`, `/metrics`, 401 → Trivy image.
+
+### Модель и версия
+
+- `models/lab2_span_tfidf.joblib`, `models/lab2_span_logreg.joblib`, `models/SHA256SUMS`.
+- `model_version` в `/predict` — 12 hex SHA-256 `lab2_span_logreg.joblib`.
+- Воспроизведение: `python -m src.train --artifacts ci_data --seed 42` →
+  `sha256sum -c models/SHA256SUMS` → `docker build` → smoke.
