@@ -262,3 +262,26 @@ proxy и в метрики приложения **не попадает**:
 `nginx_http_requests_total{status="429"}` (если включён `nginx-prometheus-exporter`),
 или `limit_req_status`/`client_max_body_size` в логах nginx. В ЛР4 proxy нет —
 все отказы в метриках приложения.
+
+## Контролируемый сценарий подозрительной активности (ЛР4, задание 8)
+
+Скрипт: `scripts/security_scenario.py` (HTTP, не TestClient). Запускается на
+живом сервисе с малым лимитом.
+
+### Сценарий
+
+- Baseline: `/health` healthy, `/metrics` доступен, `/predict` с токеном → 200.
+- Серия 401: 10 запросов с неверным `X-API-Key` → 10×401.
+- Серия 429: 8 запросов с правильным токеном при `RATE_LIMIT_MAX=5, RATE_LIMIT_WINDOW=60`
+  → 5×200 + 3×429.
+- Метрики: `predictor_failures_total{reason="auth"}` вырос на 10,
+  `{reason="rate_limit"}` — на 3.
+- Восстановление: `/health` healthy, сервис отвечает (не 5xx); корректный
+  `/predict` проходит после сброса окна (60 с) или с другого ключа/IP.
+
+### Правило обнаружения (пример для Prometheus)
+
+```promql
+delta(predictor_failures_total{reason="auth"}[60s]) > 5
+or
+delta(predictor_failures_total{reason="rate_limit"}[60s]) > 3

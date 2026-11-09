@@ -1,0 +1,90 @@
+{
+  "scenario": "suspicious_activity_controlled",
+  "started_at_utc": "2026-11-09T14:25:43.754462+00:00",
+  "base_url": "http://127.0.0.1:8000",
+  "limits": {
+    "rate_limit_max": 5,
+    "rate_limit_window_sec": 60,
+    "n_auth_fail_requests": 10,
+    "n_rate_requests": 8
+  },
+  "detection_rule": {
+    "window_sec": 60,
+    "auth_401_threshold": 5,
+    "rate_429_threshold": 3,
+    "expr": "delta(predictor_failures_total{reason='auth'}[60s]) > 5 or delta(predictor_failures_total{reason='rate_limit'}[60s]) > 3"
+  },
+  "steps": [
+    {
+      "step": "health_before",
+      "status": 200,
+      "body": "{\"status\":\"healthy\",\"model_version\":\"234d712c7867\"}"
+    },
+    {
+      "step": "predict_before",
+      "status": 200,
+      "body": "{\"predictions\":[{\"span\":\"ivan.petrov@example.com\",\"label\":\"email\",\"confidence\":0.9205741944702746}],\"model_version\":\"234d712c7867\",\"request_id\":\"23805e9b-b788-416b-a399-2f3e6b33c4fe\"}"
+    },
+    {
+      "step": "auth_failures",
+      "n": 10,
+      "codes": [
+        401,
+        401,
+        401,
+        401,
+        401,
+        401,
+        401,
+        401,
+        401,
+        401
+      ],
+      "count_401": 10
+    },
+    {
+      "step": "rate_limit",
+      "n": 8,
+      "codes": [
+        200,
+        200,
+        200,
+        200,
+        429,
+        429,
+        429,
+        429
+      ],
+      "count_429": 4,
+      "count_200": 4
+    },
+    {
+      "step": "predict_after",
+      "status": 429
+    },
+    {
+      "step": "health_after",
+      "status": 200,
+      "body": "{\"status\":\"healthy\",\"model_version\":\"234d712c7867\"}"
+    }
+  ],
+  "metrics": {
+    "auth_before": 0.0,
+    "auth_after": 10.0,
+    "delta_auth": 10.0,
+    "rate_before": 0.0,
+    "rate_after": 4.0,
+    "delta_rate": 4.0
+  },
+  "detection": {
+    "rules": {
+      "auth_rule": true,
+      "rate_rule": true
+    },
+    "fired": true
+  },
+  "recovered": true,
+  "health_after_ok": true,
+  "duration_sec": 1.082,
+  "finished_at_utc": "2026-11-09T14:25:44.836662+00:00"
+}
