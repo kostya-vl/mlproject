@@ -148,3 +148,52 @@ def test_static_js_does_not_leak_token(client):
     assert API_TOKEN not in r.text
     assert "localStorage" in r.text  # упомянут только в комментарии про «не хранить»
 
+def _make_spy(pred_mod, calls):
+    real = pred_mod._MODEL
+
+    class Spy:
+        classes_ = real.classes_
+        n_features_in_ = real.n_features_in_
+
+        def predict_proba(self, X):
+            calls["n"] += 1
+            return real.predict_proba(X)
+
+    return Spy()
+
+
+def test_model_not_called_on_401(client, monkeypatch):
+    """Отклонение по токену — модель не вызывается."""
+    import src.predictor as pred_mod
+    calls = {"n": 0}
+    monkeypatch.setattr(pred_mod, "_MODEL", _make_spy(pred_mod, calls))
+    r = client.post("/predict", json={"spans": ["a@b.com"]},
+                    headers={"X-API-Key": "wrong"})
+    assert r.status_code == 401
+    assert calls["n"] == 0, "model.predict_proba must NOT be called on 401"
+
+
+def test_model_not_called_on_422(client, monkeypatch):
+    """Нарушенная схема — модель не вызывается."""
+    import src.predictor as pred_mod
+    calls = {"n": 0}
+    monkeypatch.setattr(pred_mod, "_MODEL", _make_spy(pred_mod, calls))
+    r = client.post("/predict", json={"spans": []})
+    assert r.status_code == 422
+    assert calls["n"] == 0, "model.predict_proba must NOT be called on 422"
+
+
+def test_model_not_called_on_429(client, monkeypatch):
+    """Rate limit — модель не вызывается."""
+    import src.predictor as pred_mod
+    calls = {"n": 0}
+    monkeypatch.setattr(pred_mod, "_MODEL", _make_spy(pred_mod, calls))
+    monkeypatch.setenv("RATE_LIMIT_MAX", "1")
+    from app import ratelimit
+    ratelimit.reset()
+    assert client.post("/predict", json={"spans": ["a@b.com"]}).status_code == 200
+    r = client.post("/predict", json={"spans": ["a@b.com"]})
+    assert r.status_code == 429
+    assert calls["n"] == 1, "model must be called only for the first (200) request"
+    ratelimit.reset()
+
